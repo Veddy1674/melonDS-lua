@@ -567,10 +567,14 @@ public:
     NDS& operator=(NDS&&) = delete;
 
     static thread_local NDS* Current;
+
+    
+
 protected:
     explicit NDS(NDSArgs&& args, int type, void* userdata) noexcept;
     virtual u32 GetSavestateConfig();
     virtual void DoSavestateExtra(Savestate* file) {}
+
 };
 
 }

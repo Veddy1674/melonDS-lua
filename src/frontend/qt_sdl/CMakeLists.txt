@@ -94,6 +94,12 @@ add_compile_definitions(ARCHIVE_SUPPORT_ENABLED)
 
 add_executable(melonDS ${SOURCES_QT_SDL})
 
+# add sol folder
+target_include_directories(melonDS PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+    ${LUA_INCLUDE_DIR}
+)
+
 add_subdirectory("../../net"
     ${CMAKE_BINARY_DIR}/net)
 
@@ -190,9 +196,9 @@ if (USE_QT6)
 else()
     target_include_directories(melonDS PUBLIC ${Qt5Gui_PRIVATE_INCLUDE_DIRS})
 endif()
-target_link_libraries(melonDS PRIVATE core)
+target_link_libraries(melonDS PRIVATE core ${LUA_LIBRARIES})
 target_link_libraries(melonDS PRIVATE PkgConfig::SDL2 PkgConfig::LibArchive PkgConfig::Zstd PkgConfig::Faad)
-target_link_libraries(melonDS PRIVATE ${QT_LINK_LIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(melonDS PRIVATE ${QT_LINK_LIBS} ${CMAKE_DL_LIBS} dl m)
 
 if (WIN32)
     option(PORTABLE "Make a portable build that looks for its configuration in the current directory" ON)

@@ -264,7 +264,7 @@ private:
 
     int instanceID;
 
-    EmuThread* emuThread;
+    // EmuThread* emuThread; // made public
 
     MainWindow* mainWindow;
     MainWindow* windowList[kMaxWindows];
@@ -304,6 +304,9 @@ public:
     bool fastForwardToggled;
     bool slowmoToggled;
     bool doAudioSync;
+
+    EmuThread* emuThread; //!
+
 private:
 
     std::unique_ptr<melonDS::Savestate> backupState;

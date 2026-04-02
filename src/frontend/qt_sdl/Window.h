@@ -43,6 +43,8 @@ class EmuThread;
 
 const int kMaxRecentROMs = 10;
 
+extern QString currentScriptPath; //!
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -103,6 +105,9 @@ signals:
 
 private slots:
     void onOpenFile();
+    void onOpenScript(); //!
+    void onRunScript(); //!
+
     void onClickRecentFile();
     void onClearRecentFiles();
     void onBootFirmware();
@@ -196,6 +201,7 @@ private:
     bool verifySetup();
     QString pickFileFromArchive(QString archiveFileName);
     QStringList pickROM(bool gba);
+    QStringList pickScript(); //!
     void updateCartInserted(bool gba);
 
     void createScreenPanel();
@@ -295,6 +301,8 @@ public:
     QAction* actAudioSync;
 
     QAction* actAbout;
+    QAction* actSelectScript; //!
+    QAction* actRunScript; //!
 };
 
 #endif // WINDOW_H

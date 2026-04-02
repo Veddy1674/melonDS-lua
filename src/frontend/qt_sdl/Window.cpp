@@ -81,11 +81,11 @@
 #include "CameraManager.h"
 #include "Window.h"
 #include "AboutDialog.h"
+#include <sol/sol.hpp>
 
 using namespace melonDS;
 
-
-
+QString currentScriptPath = ""; // init
 
 extern CameraManager* camManager[2];
 extern bool camStarted[2];
@@ -666,14 +666,22 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
             QMenu * menu = menubar->addMenu("Help");
             actAbout = menu->addAction("About...");
             connect(actAbout, &QAction::triggered, this, [&]
-            {
-                auto dialog = AboutDialog(this);
-                dialog.exec();
-            });
+                {
+                    auto dialog = AboutDialog(this);
+                    dialog.exec();
+                });
+        }  
+        { //!
+            QMenu * menu = menubar->addMenu("Scripting");
+
+            actSelectScript = menu->addAction("Select Script...");
+            connect(actSelectScript, &QAction::triggered, this, &MainWindow::onOpenScript);
+
+            actRunScript = menu->addAction("Run Selected Script");
+            connect(actRunScript, &QAction::triggered, this, &MainWindow::onRunScript);
         }
-
         setMenuBar(menubar);
-
+        
         if (localCfg.GetString("Firmware.Username") == "Arisotura")
             actMPNewInstance->setText("Fart");
     }
@@ -1309,6 +1317,22 @@ QStringList MainWindow::pickROM(bool gba)
     return ret;
 }
 
+//!
+QStringList MainWindow::pickScript()
+{
+    const QString filename = QFileDialog::getOpenFileName(
+        this, "Open Lua Script",
+        globalCfg.GetQString("LastScriptFolder"),
+        "Lua scripts (*.lua);;All files (*.*)"
+    );
+
+    if (filename.isEmpty())
+        return {};
+
+    globalCfg.SetQString("LastScriptFolder", QFileInfo(filename).dir().path());
+    return { filename };
+}
+
 void MainWindow::updateCartInserted(bool gba)
 {
     bool inserted;
@@ -1366,6 +1390,49 @@ void MainWindow::onOpenFile()
     updateRecentFilesMenu();
 
     updateCartInserted(false);
+}
+
+//!
+void MainWindow::onOpenScript()
+{
+    QStringList file = pickScript();
+    if (file.isEmpty())
+        return;
+
+    QString scriptPath = file.first();
+    
+    extern QString currentScriptPath;
+    currentScriptPath = scriptPath;
+    
+    printf("Script loaded: %s\n", scriptPath.toUtf8().constData());
+}
+
+//!
+void MainWindow::onRunScript()
+{
+    extern QString currentScriptPath;
+    extern sol::state LUA; // main.cpp
+
+    if (currentScriptPath.isEmpty())
+    {
+        printf("No script selected!\n");
+        return;
+    }
+    
+    if (!emuThread->emuIsActive())
+    {
+        printf("No game is running!\n");
+        return;
+    }
+
+    printf("Running script: %s\n", currentScriptPath.toUtf8().constData());
+    
+    // try run
+    try {
+        LUA.script_file(currentScriptPath.toUtf8().constData());
+    } catch (const sol::error& e) {
+        printf("Lua error: %s\n", e.what());
+    }
 }
 
 void MainWindow::onClearRecentFiles()

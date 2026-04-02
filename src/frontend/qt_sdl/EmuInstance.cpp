@@ -1924,11 +1924,15 @@ bool EmuInstance::loadROM(QStringList filepath, bool reset, QString& errorstr)
         nextCart = std::move(cart);
         changeCart = true;
 
-        if (!updateConsole())
+        if (!updateConsole()) // sets "nds" to new instance
         {
             errorstr = "Failed to load the DS ROM.";
             return false;
         }
+
+        //!
+        extern NDS* nds;
+        nds = this->nds;
 
         initFirmwareSaveManager();
         nds->Reset();

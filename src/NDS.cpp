@@ -1065,6 +1065,7 @@ u32 NDS::RunFrame()
     // In the context of TASes, frame count is traditionally the primary measure of emulated time,
     // so it needs to be tracked even if NDS is powered off.
     NumFrames++;
+
     if (LagFrameFlag)
         NumLagFrames++;
 
@@ -1643,6 +1644,8 @@ void NDS::MonitorARM9Jump(u32 addr)
         {
             Log(LogLevel::Info, "Game is now booting\n");
             RunningGame = true;
+
+            //! lua scripts can run from now on
         }
     }
 }

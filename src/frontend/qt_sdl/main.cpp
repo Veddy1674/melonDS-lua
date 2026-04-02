@@ -65,6 +65,9 @@
 #include "Net_PCap.h"
 #include "Net_Slirp.h"
 
+#include <sol/sol.hpp>
+#include "NDS.h"
+
 using namespace melonDS;
 
 QString* systemThemeName;
@@ -81,9 +84,8 @@ bool camStarted[2];
 std::optional<LibPCap> pcap;
 Net net;
 
-
+NDS* nds = nullptr; //! assigned in EmuInstance::loadRom() after updateConsole()
 QElapsedTimer sysTimer;
-
 
 void NetInit()
 {
@@ -131,6 +133,7 @@ bool createEmuInstance()
         return false;
 
     auto inst = new EmuInstance(id);
+
     emuInstances[id] = inst;
 
     return true;
@@ -266,6 +269,59 @@ bool MelonApplication::event(QEvent *event)
     return QApplication::event(event);
 }
 
+extern sol::state LUA;
+sol::state LUA;
+
+void setup_lua() { //!
+    LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package);
+
+    // extern EmuThread* emuThread; // EmuInstance.cpp
+    // LUA.set_function("pause", &emuThread->emuPause);
+    
+    sol::table native = LUA.create_table();
+    native.set_function("read_s8_le", &read_s8_le);
+    native.set_function("read_s16_le", &read_s16_le);
+    native.set_function("read_s32_le", &read_s32_le);
+    native.set_function("write_s8_le", &write_s8_le);
+    native.set_function("write_s16_le", &write_s16_le);
+    native.set_function("write_s32_le", &write_s32_le);
+    LUA["native"] = native;
+
+    LUA.set("RAM_SIZE", 0x400000);
+}
+
+// read memory
+// Nelle tue funzioni di binding Lua
+int read_s8_le(u32 address) {
+    if (address == -1) return -1;
+    return nds->ARM9Read8(address);
+}
+
+int read_s16_le(u32 address) {
+    if (address == -1) return -1;
+    return nds->ARM9Read16(address);
+}
+
+int read_s32_le(u32 address) {
+    if (address == -1) return -1;
+    return nds->ARM9Read32(address);
+}
+
+void write_s8_le(u32 address, u8 value) {
+    if (address == -1) return;
+    nds->ARM9Write8(address, value);
+}
+
+void write_s16_le(u32 address, u16 value) {
+    if (address == -1) return;
+    nds->ARM9Write16(address, value);
+}
+
+void write_s32_le(u32 address, u32 value) {
+    if (address == -1) return;
+    nds->ARM9Write32(address, value);
+}
+
 int main(int argc, char** argv)
 {
     sysTimer.start();
@@ -281,8 +337,11 @@ int main(int argc, char** argv)
     qputenv("QT_QPA_PLATFORM", "windows:darkmode=2");
 #endif
 
-    printf("melonDS " MELONDS_VERSION "\n");
+    printf("melonDS " MELONDS_VERSION " - With LUA Scripting\n");
     printf(MELONDS_URL "\n");
+
+    //! lua init
+    setup_lua();
 
     // easter egg - not worth checking other cases for something so dumb
     if (argc != 0 && (!strcasecmp(argv[0], "derpDS") || !strcasecmp(argv[0], "./derpDS")))

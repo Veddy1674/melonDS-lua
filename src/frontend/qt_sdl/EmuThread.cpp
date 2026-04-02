@@ -150,12 +150,13 @@ void EmuThread::run()
     emuInstance->fastForwardToggled = false;
     emuInstance->slowmoToggled = false;
 
+    //! hotkeys
     while (emuStatus != emuStatus_Exit)
     {
         if (emuInstance->instanceID == 0)
             MPInterface::Get().Process();
 
-        emuInstance->inputProcess();
+        emuInstance->inputProcess(); // joystick & hotkey update
 
         if (emuInstance->hotkeyPressed(HK_FrameLimitToggle)) emit windowLimitFPSChange();
 

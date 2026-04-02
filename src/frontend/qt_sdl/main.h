@@ -31,6 +31,8 @@
 #include "ScreenLayout.h"
 #include "MPInterface.h"
 
+using namespace melonDS;
+
 enum
 {
     InstCmd_Pause,
@@ -62,5 +64,13 @@ int numEmuInstances();
 void broadcastInstanceCommand(int cmd, QVariant& param, int sourceinst);
 
 void setMPInterface(melonDS::MPInterfaceType type);
+
+// memory read/write
+int read_s8_le(u32 address);
+int read_s16_le(u32 address);
+int read_s32_le(u32 address);
+void write_s8_le(u32 address, u8 value);
+void write_s16_le(u32 address, u16 value);
+void write_s32_le(u32 address, u32 value);
 
 #endif // MAIN_H
