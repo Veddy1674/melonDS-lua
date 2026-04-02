@@ -279,15 +279,44 @@ void setup_lua() { //!
     // LUA.set_function("pause", &emuThread->emuPause);
     
     sol::table native = LUA.create_table();
+    // memory-related
     native.set_function("read_s8_le", &read_s8_le);
     native.set_function("read_s16_le", &read_s16_le);
     native.set_function("read_s32_le", &read_s32_le);
     native.set_function("write_s8_le", &write_s8_le);
     native.set_function("write_s16_le", &write_s16_le);
     native.set_function("write_s32_le", &write_s32_le);
+
+    // emulator-related
+    native.set_function("setPaused", [](bool pause) {
+        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        {
+            auto thread = emuInstances[0]->getEmuThread();
+            
+            if (pause)
+                thread->emuPause();
+            else
+                thread->emuUnpause();
+        }
+    });
+
+    native.set_function("getPaused", []() -> bool {
+        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        {
+            auto thread = emuInstances[0]->getEmuThread();
+            return !thread->emuIsRunning();
+        }
+        return true;
+    });
+
     LUA["native"] = native;
 
     LUA.set("RAM_SIZE", 0x400000);
+
+    // so that files in 'core/' and nearby are found
+    LUA.script(R"(
+        package.path = package.path .. ";" .. "lua/?.lua"
+    )");
 }
 
 // read memory
