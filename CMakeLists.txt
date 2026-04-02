@@ -36,6 +36,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# find lua (5.4)
+find_package(Lua REQUIRED)
+
+# link lua libs to system
+add_library(Lua::Lua INTERFACE IMPORTED)
+target_include_directories(Lua::Lua INTERFACE ${LUA_INCLUDE_DIR})
+target_link_libraries(Lua::Lua INTERFACE ${LUA_LIBRARIES} dl m)
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
