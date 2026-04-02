@@ -118,3 +118,6 @@ add_subdirectory(src)
 if (BUILD_QT_SDL)
     add_subdirectory(src/frontend/qt_sdl)
 endif()
+
+# copy lua folder to build/
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/lua/" DESTINATION "${CMAKE_BINARY_DIR}/lua")
