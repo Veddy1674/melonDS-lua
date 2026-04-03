@@ -321,13 +321,13 @@ void GLRenderer::PostSavestate()
 
 void GLRenderer::SetRenderSettings(RendererSettings& settings)
 {
-    SetScaleFactor(settings.ScaleFactor);
+    SetScaleFactor(settings.ScaleFactor, settings.DownSampling);
 
     auto rend2d = dynamic_cast<GLRenderer2D*>(Rend2D_A.get());
-    rend2d->SetScaleFactor(settings.ScaleFactor);
+    rend2d->SetScaleFactor(settings.ScaleFactor, settings.DownSampling);
 
     rend2d = dynamic_cast<GLRenderer2D*>(Rend2D_B.get());
-    rend2d->SetScaleFactor(settings.ScaleFactor);
+    rend2d->SetScaleFactor(settings.ScaleFactor, settings.DownSampling);
 
     if (IsCompute)
     {
@@ -342,14 +342,21 @@ void GLRenderer::SetRenderSettings(RendererSettings& settings)
 }
 
 
-void GLRenderer::SetScaleFactor(int scale)
+void GLRenderer::SetScaleFactor(int scale, int downSampling)
 {
-    if (scale == ScaleFactor)
+    if (scale == ScaleFactor && downSampling == DownSampling)
         return;
+    
+    if (scale != 1)
+        downSampling = 1;
 
     ScaleFactor = scale;
-    ScreenW = 256 * scale;
-    ScreenH = 192 * scale;
+    DownSampling = downSampling;
+
+    ScreenW = 256 * scale / downSampling;
+    ScreenH = 192 * scale / downSampling;
+
+    printf("scale: %d, downSampling: %d, ScreenW: %d, ScreenH: %d\n", scale, downSampling, ScreenW, ScreenH);
 
     const GLenum fbassign2[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
 
@@ -537,7 +544,9 @@ void GLRenderer::RenderScreen(int ystart, int yend)
 
     // TODO: adjust incoming vertices instead of doing this?
     glEnable(GL_SCISSOR_TEST);
-    glScissor(0, ystart * ScaleFactor, ScreenW, (yend-ystart) * ScaleFactor);
+    int scissorY = ystart * ScaleFactor / DownSampling;
+    int scissorHeight = (yend - ystart) * ScaleFactor / DownSampling;
+    glScissor(0, scissorY, ScreenW, scissorHeight);
 
     int vramcap = -1;
     if (AuxUsageMask & (1<<0))
@@ -556,6 +565,15 @@ void GLRenderer::RenderScreen(int ystart, int yend)
     else
     {
         glUseProgram(FPShader);
+
+        // force filtering to nearest for special cases (0.5, 0.25)
+        if (DownSampling != 1) {
+            for (int i = 0; i < 2; i++) {
+                glBindTexture(GL_TEXTURE_2D_ARRAY, FPOutputTex[i]);
+                glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            }
+        }
 
         FinalPassConfig.uScaleFactor = ScaleFactor;
         FinalPassConfig.uDispModeA = (DispCntA >> 16) & 0x3;
@@ -695,6 +713,10 @@ void GLRenderer::DoCapture(int ystart, int yend)
             int blitY0 = (srcBoffset * 64) + ystart;
             int blitY1 = (srcBoffset * 64) + yend;
 
+            int blitY0_scaled = blitY0 * ScaleFactor / DownSampling;
+            int blitY1_scaled = blitY1 * ScaleFactor / DownSampling;
+            int height_scaled = 256 * ScaleFactor / DownSampling;
+
             if (dstoffset != srcBoffset)
                 Log(LogLevel::Error, "GPU_OpenGL: MISMATCHED VRAM OFFSETS ON SAME BANK!!! bank=%d src=%d dst=%d\n",
                        dstblock, srcBoffset, dstoffset);
@@ -702,21 +724,20 @@ void GLRenderer::DoCapture(int ystart, int yend)
             glBindFramebuffer(GL_READ_FRAMEBUFFER, CaptureOutput256FB[srcBblock]);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, CaptureVRAMFB);
 
+            // checkme
             if (blitY1 > 256)
             {
-                // wraparound
-                glBlitFramebuffer(0, blitY0*ScaleFactor, 256*ScaleFactor, 256*ScaleFactor,
-                                  0, blitY0*ScaleFactor, 256*ScaleFactor, 256*ScaleFactor,
+                glBlitFramebuffer(0, blitY0_scaled, 256*ScaleFactor/DownSampling, height_scaled,
+                                  0, blitY0_scaled, 256*ScaleFactor/DownSampling, height_scaled,
                                   GL_COLOR_BUFFER_BIT, GL_NEAREST);
-                glBlitFramebuffer(0, 0, 256*ScaleFactor, (blitY1-256)*ScaleFactor,
-                                  0, 0, 256*ScaleFactor, (blitY1-256)*ScaleFactor,
+                glBlitFramebuffer(0, 0, 256*ScaleFactor/DownSampling, (blitY1-256)*ScaleFactor/DownSampling,
+                                  0, 0, 256*ScaleFactor/DownSampling, (blitY1-256)*ScaleFactor/DownSampling,
                                   GL_COLOR_BUFFER_BIT, GL_NEAREST);
             }
             else
             {
-                // straightforward
-                glBlitFramebuffer(0, blitY0*ScaleFactor, 256*ScaleFactor, blitY1*ScaleFactor,
-                                  0, blitY0*ScaleFactor, 256*ScaleFactor, blitY1*ScaleFactor,
+                glBlitFramebuffer(0, blitY0_scaled, 256*ScaleFactor/DownSampling, blitY1_scaled,
+                                  0, blitY0_scaled, 256*ScaleFactor/DownSampling, blitY1_scaled,
                                   GL_COLOR_BUFFER_BIT, GL_NEAREST);
             }
 

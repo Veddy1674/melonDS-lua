@@ -819,6 +819,7 @@ struct RendererSettings
 {
     // scale factor, for renderers that support upscaling
     int ScaleFactor;
+    int DownSampling;
 
     // whether to use separate threads for rendering
     bool Threaded;

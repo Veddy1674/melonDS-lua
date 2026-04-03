@@ -878,6 +878,7 @@ void EmuThread::updateRenderer()
     auto& cfg = emuInstance->getGlobalConfig();
     melonDS::RendererSettings settings = {
         .ScaleFactor = cfg.GetInt("3D.GL.ScaleFactor"),
+        .DownSampling = cfg.GetInt("3D.GL.DownSampling"),
         .Threaded = cfg.GetBool("3D.Soft.Threaded"),
         .HiresCoordinates = cfg.GetBool("3D.GL.HiresCoordinates"),
         .BetterPolygons = cfg.GetBool("3D.GL.BetterPolygons")

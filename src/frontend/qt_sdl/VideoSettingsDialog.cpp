@@ -46,6 +46,7 @@ void VideoSettingsDialog::setEnabled()
     ui->cbGLDisplay->setEnabled(softwareRenderer);
     ui->cbSoftwareThreaded->setEnabled(softwareRenderer);
     ui->cbxGLResolution->setEnabled(!softwareRenderer);
+    ui->cbxGLDownSampling->setEnabled(!softwareRenderer && ui->cbxGLResolution->currentIndex() == 0);
     ui->cbBetterPolygons->setEnabled(renderer == renderer3D_OpenGL);
     ui->cbxComputeHiResCoords->setEnabled(renderer == renderer3D_OpenGLCompute);
 }
@@ -64,6 +65,7 @@ VideoSettingsDialog::VideoSettingsDialog(QWidget* parent) : QDialog(parent), ui(
     oldVSyncInterval = cfg.GetInt("Screen.VSyncInterval");
     oldSoftThreaded = cfg.GetBool("3D.Soft.Threaded");
     oldGLScale = cfg.GetInt("3D.GL.ScaleFactor");
+    oldGLDownSampling = cfg.GetInt("3D.GL.DownSampling");
     oldGLBetterPolygons = cfg.GetBool("3D.GL.BetterPolygons");
     oldHiresCoordinates = cfg.GetBool("3D.GL.HiresCoordinates");
 
@@ -95,7 +97,14 @@ VideoSettingsDialog::VideoSettingsDialog(QWidget* parent) : QDialog(parent), ui(
 
     for (int i = 1; i <= 16; i++)
         ui->cbxGLResolution->addItem(QString("%1x native (%2x%3)").arg(i).arg(256*i).arg(192*i));
-    ui->cbxGLResolution->setCurrentIndex(oldGLScale-1);
+    
+    ui->cbxGLResolution->setCurrentIndex(oldGLScale - 1);
+
+    ui->cbxGLDownSampling->addItem(QString("Disabled")); // idx 0, val = 1 (disabled)
+    ui->cbxGLDownSampling->addItem(QString("2x (128x96 - 1/2)")); // idx 1, val = 2
+    ui->cbxGLDownSampling->addItem(QString("4x (64x48 - 1/4)")); // idx 2, val = 4
+
+    ui->cbxGLDownSampling->setCurrentIndex(oldGLDownSampling / 2);
 
     ui->cbBetterPolygons->setChecked(oldGLBetterPolygons != 0);
     ui->cbxComputeHiResCoords->setChecked(oldHiresCoordinates != 0);
@@ -136,6 +145,7 @@ void VideoSettingsDialog::on_VideoSettingsDialog_rejected()
     cfg.SetInt("Screen.VSyncInterval", oldVSyncInterval);
     cfg.SetBool("3D.Soft.Threaded", oldSoftThreaded);
     cfg.SetInt("3D.GL.ScaleFactor", oldGLScale);
+    cfg.SetInt("3D.GL.DownSampling", oldGLDownSampling);
     cfg.SetBool("3D.GL.BetterPolygons", oldGLBetterPolygons);
     cfg.SetBool("3D.GL.HiresCoordinates", oldHiresCoordinates);
 
@@ -203,11 +213,27 @@ void VideoSettingsDialog::on_cbSoftwareThreaded_stateChanged(int state)
 
 void VideoSettingsDialog::on_cbxGLResolution_currentIndexChanged(int idx)
 {
-    // prevent a spurious change
     if (ui->cbxGLResolution->count() < 16) return;
 
     auto& cfg = emuInstance->getGlobalConfig();
-    cfg.SetInt("3D.GL.ScaleFactor", idx+1);
+    
+    cfg.SetInt("3D.GL.ScaleFactor", idx + 1);
+
+    setVsyncControlEnable(UsesGL());
+
+    ui->cbxGLDownSampling->setEnabled(ui->cbxGLResolution->currentIndex() == 0);
+    emit updateVideoSettings(false);
+}
+
+void VideoSettingsDialog::on_cbxGLDownSampling_currentIndexChanged(int idx)
+{
+    if (ui->cbxGLDownSampling->count() < 3) return;
+
+    auto& cfg = emuInstance->getGlobalConfig();
+    
+    cfg.SetInt("3D.GL.DownSampling", idx == 0 ? 1 : idx * 2); // 1 disabled, 2, 4
+
+    printf("DownSampling index: %d, value: %d\n", idx, idx == 0 ? 1 : idx * 2);
 
     setVsyncControlEnable(UsesGL());
 

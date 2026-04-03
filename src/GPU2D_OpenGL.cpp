@@ -449,14 +449,21 @@ void GLRenderer2D::PostSavestate()
 }
 
 
-void GLRenderer2D::SetScaleFactor(int scale)
+void GLRenderer2D::SetScaleFactor(int scale, int downSampling)
 {
-    if (scale == ScaleFactor)
+    if (scale == ScaleFactor && downSampling == DownSampling)
         return;
+    
+    if (scale != 1)
+        downSampling = 1;
 
     ScaleFactor = scale;
-    ScreenW = 256 * scale;
-    ScreenH = 192 * scale;
+    DownSampling = downSampling;
+
+    ScreenW = 256 * scale / downSampling;
+    ScreenH = 192 * scale / downSampling;
+
+    printf("scale: %d, downSampling: %d, ScreenW: %d, ScreenH: %d\n", scale, downSampling, ScreenW, ScreenH);
 
     const GLenum fbassign2[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
 

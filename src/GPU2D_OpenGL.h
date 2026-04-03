@@ -41,7 +41,7 @@ public:
 
     void PostSavestate();
 
-    void SetScaleFactor(int scale);
+    void SetScaleFactor(int scale, int downSampling);
 
     void DrawScanline(u32 line) override;
     void DrawSprites(u32 line) override;
@@ -53,6 +53,7 @@ private:
     GLRenderer& Parent;
 
     int ScaleFactor;
+    int DownSampling;
     int ScreenW, ScreenH;
 
     GLuint LayerPreShader;

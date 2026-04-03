@@ -63,6 +63,7 @@ private:
     bool IsCompute;
 
     int ScaleFactor;
+    int DownSampling;
     int ScreenW, ScreenH;
 
     GLuint RectVtxBuffer;
@@ -143,7 +144,7 @@ private:
     int LastCapLine;
     int Aux0VRAMCap;
 
-    void SetScaleFactor(int scale);
+    void SetScaleFactor(int scale, int resize_div);
 
     void RenderScreen(int ystart, int yend);
     void DoCapture(int ystart, int yend);
