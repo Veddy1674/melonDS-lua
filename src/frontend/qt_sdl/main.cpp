@@ -330,12 +330,49 @@ void setup_lua() { //!
             
             return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
         }
-        // else {
-        //     // OpenGL: 'screen_buffer' is GLuint?
-        //     GLuint texture_id = static_cast<GLuint>(reinterpret_cast<uintptr_t>(screen_buffer));
-        //     return sol::make_object(LUA, texture_id);
-        // }
-        return sol::nil;
+        else {
+            // OpenGL: 'screen_buffer' is GLuint?
+            GLuint texture_id = static_cast<GLuint>(reinterpret_cast<uintptr_t>(screen_buffer));
+            return sol::make_object(LUA, texture_id);
+        }
+        // return sol::nil;
+    });
+
+    // sometimes causes visual glitches with OpenGL renderer
+    native.set_function("frame_advance", [](int frames) {
+        for (int i = 0; i < frames; i++)
+            nds->RunFrame();
+    });
+
+    native.set_function("reset", []() {
+        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        {
+            auto thread = emuInstances[0]->getEmuThread();
+            thread->emuReset();
+        }
+    });
+
+    native.set_function("savestate_file", [](QString path) {
+        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        {
+            auto thread = emuInstances[0]->getEmuThread();
+            return thread->saveState(path);
+        }
+        return -1;
+    });
+
+    native.set_function("loadstate_file", [](QString path) {
+        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        {
+            auto thread = emuInstances[0]->getEmuThread();
+            return thread->loadState(path);
+        }
+        return -1;
+    });
+
+    // time in milliseconds
+    native.set_function("time", []() -> int {
+        return sysTimer.elapsed();
     });
 
     LUA["native"] = native;
