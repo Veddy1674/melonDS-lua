@@ -309,33 +309,23 @@ void setup_lua() { //!
         return true;
     });
 
-    // returns a binary string containing the framebuffer data for the specified screen
+    // for software renderer, NOT OPENGL
     native.set_function("get_screen", [](int screen_index) -> sol::object {
         auto& renderer = nds->GPU.GetRenderer();
         void* fb_top = nullptr;
         void* fb_bottom = nullptr;
+        
+        bool usesRamFramebuffers = renderer.GetFramebuffers(&fb_top, &fb_bottom);
+        
+        // if software renderer
+        if (usesRamFramebuffers && fb_top && fb_bottom) {
 
-        bool uses_ram_framebuffers = renderer.GetFramebuffers(&fb_top, &fb_bottom);
+            void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
+            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8
 
-        // select framebuffer on screen_index
-        void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
-
-        if (uses_ram_framebuffers) {
-            // data in ram
-            if (screen_buffer == nullptr)
-                return sol::nil;
-
-            // each pixel is a u32
-            size_t buffer_size = 256 * 192 * sizeof(u32);
-            
             return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
         }
-        else {
-            // OpenGL: 'screen_buffer' is GLuint?
-            GLuint texture_id = static_cast<GLuint>(reinterpret_cast<uintptr_t>(screen_buffer));
-            return sol::make_object(LUA, texture_id);
-        }
-        // return sol::nil;
+        return sol::nil;
     });
 
     // sometimes causes visual glitches with OpenGL renderer
