@@ -31,6 +31,8 @@
 #include "ScreenLayout.h"
 #include "MPInterface.h"
 
+#include <sol/sol.hpp>
+
 using namespace melonDS;
 
 enum
@@ -72,5 +74,16 @@ int read_s32_le(u32 address);
 void write_s8_le(u32 address, u8 value);
 void write_s16_le(u32 address, u16 value);
 void write_s32_le(u32 address, u32 value);
+
+// lua-related
+extern void luaStopEverything();
+
+extern sol::protected_function luaOnFrameCallback;
+extern void luaOnFrameFunction();
+extern void luaOnFrameFunction_stop();
+
+extern sol::protected_function luaOnPauseCallback;
+extern void luaOnPauseFunction(bool pausing);
+extern void luaOnPauseFunction_stop();
 
 #endif // MAIN_H

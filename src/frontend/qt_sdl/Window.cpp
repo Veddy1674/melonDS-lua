@@ -679,6 +679,9 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
 
             actRunScript = menu->addAction("Run Selected Script");
             connect(actRunScript, &QAction::triggered, this, &MainWindow::onRunScript);
+
+            actStopScript = menu->addAction("Stop Selected Script");
+            connect(actStopScript, &QAction::triggered, this, &MainWindow::onStopScript);
         }
         setMenuBar(menubar);
         
@@ -1392,7 +1395,8 @@ void MainWindow::onOpenFile()
     updateCartInserted(false);
 }
 
-//!
+// script related:
+
 void MainWindow::onOpenScript()
 {
     QStringList file = pickScript();
@@ -1407,7 +1411,6 @@ void MainWindow::onOpenScript()
     printf("Script loaded: %s\n", scriptPath.toUtf8().constData());
 }
 
-//!
 void MainWindow::onRunScript()
 {
     extern QString currentScriptPath;
@@ -1415,24 +1418,62 @@ void MainWindow::onRunScript()
 
     if (currentScriptPath.isEmpty())
     {
-        printf("No script selected!\n");
+        printf("[LUA] No script selected!\n");
         return;
     }
     
     if (!emuThread->emuIsActive())
     {
-        printf("No game is running!\n");
+        printf("[LUA] No game is running!\n");
         return;
     }
 
-    printf("Running script: %s\n", currentScriptPath.toUtf8().constData());
+    if (isAScriptRunning) {
+        // printf("[LUA] Another script is running!\n");
+        // return;
+        MainWindow::onStopScript();
+    }
+
+    printf("[LUA] Running script: %s\n", currentScriptPath.toUtf8().constData());
     
     // try run
     try {
         LUA.script_file(currentScriptPath.toUtf8().constData());
+        isAScriptRunning = true;
     } catch (const sol::error& e) {
-        printf("Lua error: %s\n", e.what());
+        printf("[LUA] Lua error: %s\n", e.what());
     }
+}
+
+void MainWindow::onStopScript()
+{
+    extern QString currentScriptPath;
+    extern sol::state LUA; // main.cpp
+
+    if (currentScriptPath.isEmpty())
+    {
+        printf("[LUA] No script selected!\n");
+        return;
+    }
+    
+    if (!emuThread->emuIsActive())
+    {
+        printf("[LUA] No game is running!\n");
+        return;
+    }
+
+    if (!isAScriptRunning) {
+        printf("[LUA] No script is running!\n");
+        return;
+    }
+
+    printf("[LUA] Stopping script: %s\n", currentScriptPath.toUtf8().constData());
+
+    // NOTE: this does not actually force-stop the script, just unregisters functions called from C++
+
+    luaStopEverything();
+
+    isAScriptRunning = false;
 }
 
 void MainWindow::onClearRecentFiles()

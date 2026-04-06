@@ -105,8 +105,10 @@ signals:
 
 private slots:
     void onOpenFile();
-    void onOpenScript(); //!
-    void onRunScript(); //!
+
+    void onOpenScript();
+    void onRunScript();
+    void onStopScript();
 
     void onClickRecentFile();
     void onClearRecentFiles();
@@ -191,6 +193,8 @@ private slots:
 
 private:
     virtual void closeEvent(QCloseEvent* event) override;
+
+    bool isAScriptRunning = false;
 
     QStringList currentROM;
     QStringList currentGBAROM;
@@ -301,8 +305,10 @@ public:
     QAction* actAudioSync;
 
     QAction* actAbout;
-    QAction* actSelectScript; //!
-    QAction* actRunScript; //!
+    
+    QAction* actSelectScript;
+    QAction* actRunScript;
+    QAction* actStopScript;
 };
 
 #endif // WINDOW_H

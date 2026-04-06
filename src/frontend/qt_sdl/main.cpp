@@ -272,6 +272,75 @@ bool MelonApplication::event(QEvent *event)
 extern sol::state LUA;
 sol::state LUA;
 
+sol::protected_function luaOnFrameCallback; // extern
+sol::protected_function luaOnPauseCallback; // extern
+
+// executes a lua protected function safely, managing exceptions: returns nil if an exception occurs, otherwise the function result
+template<typename... Args>
+sol::object safeExecuteCallback(sol::protected_function& callback, Args&&... args) {
+    if (!callback.valid()) {
+        return sol::nil;
+    }
+    
+    try {
+        // accept function args
+        sol::protected_function_result result = callback(std::forward<Args>(args)...);
+        
+        if (result.valid()) {
+            return result;
+        } else {
+            sol::error err = result;
+            
+            printf("[LUA] Callback error: %s\n", err.what());
+            luaStopEverything();
+
+            return sol::nil;
+        }
+        
+    } catch (const std::exception& e) {
+        printf("[LUA] Exception: %s\n", e.what());
+        luaStopEverything();
+
+        return sol::nil;
+    } catch (...) {
+        printf("[LUA] Unknown exception\n");
+        luaStopEverything();
+
+        return sol::nil;
+    }
+}
+
+void luaOnFrameFunction() { // extern
+    auto result = safeExecuteCallback(luaOnFrameCallback);
+
+    // if is string and is "unregister"
+    if (result.is<std::string>() && result.as<std::string>() == "unregister") {
+        luaOnFrameFunction_stop();
+    }
+}
+
+void luaOnPauseFunction(bool pausing) { // extern
+    auto result = safeExecuteCallback(luaOnPauseCallback, pausing);
+
+    // if is string and is "unregister"
+    if (result.is<std::string>() && result.as<std::string>() == "unregister") {
+        luaOnPauseFunction_stop();
+    }
+}
+
+void luaOnFrameFunction_stop() { // extern
+    luaOnFrameCallback = sol::nil;
+}
+
+void luaOnPauseFunction_stop() { // extern
+    luaOnPauseCallback = sol::nil;
+}
+
+void luaStopEverything() {
+    luaOnFrameFunction_stop();
+    luaOnPauseFunction_stop();
+}
+
 void setup_lua() { //!
     LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package, sol::lib::io);
 
@@ -309,6 +378,15 @@ void setup_lua() { //!
         return true;
     });
 
+    native.set_function("onPause", [](sol::protected_function callback) {
+        luaOnPauseCallback = callback;
+    });
+
+
+    native.set_function("onFrame", [](sol::protected_function callback) {
+        luaOnFrameCallback = callback;
+    });
+
     // for software renderer, NOT OPENGL
     native.set_function("get_screen", [](int screen_index) -> sol::object {
         auto& renderer = nds->GPU.GetRenderer();
@@ -321,7 +399,7 @@ void setup_lua() { //!
         if (usesRamFramebuffers && fb_top && fb_bottom) {
 
             void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
-            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8
+            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8, roughly 196,608 bytes (196kb)
 
             return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
         }

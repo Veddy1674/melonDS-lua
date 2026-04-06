@@ -707,6 +707,8 @@ void EmuThread::emuPause(bool broadcast)
 
     if (broadcast)
         emuInstance->broadcastCommand(InstCmd_Pause);
+    
+    luaOnPauseFunction(true);
 }
 
 void EmuThread::emuUnpause(bool broadcast)
@@ -716,6 +718,8 @@ void EmuThread::emuUnpause(bool broadcast)
 
     if (broadcast)
         emuInstance->broadcastCommand(InstCmd_Unpause);
+    
+    luaOnPauseFunction(false);
 }
 
 void EmuThread::emuTogglePause(bool broadcast)

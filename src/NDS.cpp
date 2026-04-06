@@ -45,6 +45,8 @@
 #include "ARMJIT.h"
 #include "ARMJIT_Memory.h"
 
+extern void luaOnFrameFunction();
+
 namespace melonDS
 {
 using namespace Platform;
@@ -1068,6 +1070,8 @@ u32 NDS::RunFrame()
 
     if (LagFrameFlag)
         NumLagFrames++;
+
+    luaOnFrameFunction();
 
     if (Running)
         return GPU.TotalScanlines;
