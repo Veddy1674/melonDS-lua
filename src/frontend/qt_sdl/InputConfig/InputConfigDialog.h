@@ -28,6 +28,9 @@
 
 static constexpr int keypad_num = 12;
 
+extern const int dskeyorder[12];
+extern const char* dskeylabels[12];
+
 static constexpr std::initializer_list<int> hk_addons =
 {
     HK_SolarSensorIncrease,
