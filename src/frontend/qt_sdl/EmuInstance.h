@@ -307,6 +307,9 @@ public:
 
     EmuThread* emuThread; //!
 
+    melonDS::u32 getInputMask() { return inputMask; }
+    melonDS::u32 setInputMask(melonDS::u32 mask) { return inputMask = mask; }
+
 private:
 
     std::unique_ptr<melonDS::Savestate> backupState;
