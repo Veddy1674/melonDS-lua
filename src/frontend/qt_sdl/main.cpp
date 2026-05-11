@@ -67,6 +67,7 @@
 
 #include <sol/sol.hpp>
 #include "NDS.h"
+#include <InputConfig/InputConfigDialog.h>
 
 using namespace melonDS;
 
@@ -275,7 +276,7 @@ sol::state LUA;
 sol::protected_function luaOnFrameCallback; // extern
 sol::protected_function luaOnPauseCallback; // extern
 
-// executes a lua protected function safely, managing exceptions: returns nil if an exception occurs, otherwise the function result
+// executes a lua protected function safely, manages exceptions: returns nil if an exception occurs, otherwise the function result
 template<typename... Args>
 sol::object safeExecuteCallback(sol::protected_function& callback, Args&&... args) {
     if (!callback.valid()) {
@@ -290,7 +291,7 @@ sol::object safeExecuteCallback(sol::protected_function& callback, Args&&... arg
             return result;
         } else {
             sol::error err = result;
-            
+
             printf("[LUA] Callback error: %s\n", err.what());
             luaStopEverything();
 
@@ -314,17 +315,31 @@ void luaOnFrameFunction() { // extern
     auto result = safeExecuteCallback(luaOnFrameCallback);
 
     // if is string and is "unregister"
-    if (result.is<std::string>() && result.as<std::string>() == "unregister") {
-        luaOnFrameFunction_stop();
+    if (result.is<std::string>()) {
+        auto str = result.as<std::string>();
+
+        // TODO: add multi return support so that you can unregister anything
+        // e.g: return "unregisterOnPause", "unregisterOnFrame";
+
+        if (str == "unregister")
+            luaOnFrameFunction_stop();
+
+        else if (str == "unregisterAll")
+            luaStopEverything();
     }
 }
 
 void luaOnPauseFunction(bool pausing) { // extern
     auto result = safeExecuteCallback(luaOnPauseCallback, pausing);
 
-    // if is string and is "unregister"
-    if (result.is<std::string>() && result.as<std::string>() == "unregister") {
-        luaOnPauseFunction_stop();
+    if (result.is<std::string>()) {
+        auto str = result.as<std::string>();
+
+        if (str == "unregister")
+            luaOnPauseFunction_stop();
+            
+        else if (str == "unregisterAll")
+            luaStopEverything();
     }
 }
 
@@ -355,6 +370,87 @@ void setup_lua() { //!
     native.set_function("write_s8_le", &write_s8_le);
     native.set_function("write_s16_le", &write_s16_le);
     native.set_function("write_s32_le", &write_s32_le);
+
+    // NOTE: Does not work! Still trying to figure it out
+    /*native.set_function("setInput", [](std::string input, bool downOrUp) {
+
+        if (emuInstances[0] == nullptr) return -1; // NOTE: silent fail
+
+        auto emuInstance = emuInstances[0];
+        
+        int index = -1;
+        auto lower = QString(input.c_str()).toLower();
+        printf("lower: %s\n", lower.toStdString().c_str());
+        
+        for (int i = 0; i < 12; i++) { // 12 if the length of the two arrays
+            // case insensitive
+            if (QString(dskeylabels[i]).toLower() == lower) {
+                printf("index: %d\n", i);
+                index = i;
+                break;
+            }
+        }
+        
+        if (index == -1) return -1; // NOTE: silent fail
+        
+        u32 keysState = emuInstance->getInputMask(); // get
+
+        auto bit = dskeyorder[index];
+        
+        // edit
+        if (downOrUp) {
+            keysState &= ~(1 << bit);
+        } else {
+            keysState |= (1 << bit);
+        }
+
+        emuInstance->setInputMask(keysState); // set
+
+        return 0;
+    });*/
+
+    native.set_function("s", [](std::string input, bool downOrUp) {
+    // Usa NDS::Current invece della variabile globale nds
+    melonDS::NDS* currentNDS = melonDS::NDS::Current;
+    
+    if (!currentNDS) {
+        printf("ERROR: NDS::Current is NULL!\n");
+        return -1;
+    }
+    
+    int index = -1;
+    std::string lowerInput = input;
+    for (char &c : lowerInput) c = tolower(c);
+    
+    for (int i = 0; i < 12; i++) {
+        std::string label = dskeylabels[i];
+        for (char &c : label) c = tolower(c);
+        
+        if (label == lowerInput) {
+            index = i;
+            break;
+        }
+    }
+    
+    if (index == -1) return -1;
+    
+    int bit = dskeyorder[index];
+    
+    // Leggi lo stato corrente da NDS::Current
+    u32 keysState = currentNDS->KeyInput;
+    
+    if (downOrUp) {
+        keysState &= ~(1 << bit);
+        printf("%s DOWN (bit %d)\n", input.c_str(), bit);
+    } else {
+        keysState |= (1 << bit);
+        printf("%s UP (bit %d)\n", input.c_str(), bit);
+    }
+    
+    currentNDS->SetKeyMask(keysState);
+    
+    return 0;
+});
 
     // emulator-related
     native.set_function("setPaused", [](bool pause) {
@@ -444,8 +540,6 @@ void setup_lua() { //!
     });
 
     LUA["native"] = native;
-
-    LUA.set("RAM_SIZE", 0x400000);
 
     // so that files in 'core/' and nearby are found
     LUA.script(R"(
