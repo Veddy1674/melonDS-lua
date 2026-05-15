@@ -330,9 +330,9 @@ void EmuThread::run()
 #endif // MELONCAP
 
             // if pending frames and no sync mode, skip synchronization
-            bool skipFrame = emuInstance->luaPendingFrames > 0 && emuInstance->luaSyncMode;
+            bool sync = emuInstance->luaPendingFrames > 0 && emuInstance->luaSyncMode;
 
-            if (!skipFrame) {
+            if (sync) {
                 // game sync logic (partial?)
 
                 winUpdateCount++;
