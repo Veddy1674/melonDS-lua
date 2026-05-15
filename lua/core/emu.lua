@@ -27,9 +27,12 @@ function emu.reset()
     return native.reset()
 end
 
+-- Advances the game by 'frames' number of frames<br>
+-- If 'sync' is true, the method will synchronize with the emulator (e.g: wait for the frame limitator), otherwise will run as fast as possible (1ms delay between frame advance requests)
 ---@param frames number|nil
-function emu.frameSkip(frames)
-    return native.frame_skip(frames or 1)
+---@param sync boolean|nil
+function emu.frameSkip(frames, sync)
+    return native.frame_skip(frames or 1, sync or false)
 end
 
 ---@param path string
@@ -42,7 +45,6 @@ function emu.loadstate(path)
     return native.loadState_file(path)
 end
 
--- unimplemented
 ---@param input "A"|"B"|"X"|"Y"|"Left"|"Right"|"Up"|"Down"|"L"|"R"|"Select"|"Start"
 ---@param downOrUp boolean
 function emu.setInput(input, downOrUp)

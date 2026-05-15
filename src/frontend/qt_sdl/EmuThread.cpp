@@ -253,12 +253,8 @@ void EmuThread::run()
             }
 
             // process input and hotkeys
-            u32 keys = emuInstance->inputMask;
-
-            // TODO: check for a boolean?
-            keys &= emuInstance->luaInputMask; // merge
-
-            emuInstance->nds->SetKeyMask(keys);
+            if (!emuInstance->luaInputActive.load())
+                emuInstance->nds->SetKeyMask(emuInstance->inputMask);
 
             if (emuInstance->isTouching)
                 emuInstance->nds->TouchScreen(emuInstance->touchX, emuInstance->touchY);
@@ -301,7 +297,6 @@ void EmuThread::run()
                 }
             }
 
-
             // emulate
             u32 nlines;
             if (emuInstance->nds->GPU.GetRenderer().NeedsShaderCompile())
@@ -315,6 +310,8 @@ void EmuThread::run()
 
                 if (emuInstance->luaPendingFrames > 0)
                     emuInstance->luaPendingFrames--;
+                
+                // TODO: calling luaOnFrameFunction() here is more appropriate?
             }
 
             if (emuInstance->ndsSave)
@@ -326,17 +323,17 @@ void EmuThread::run()
             if (emuInstance->firmwareSave)
                 emuInstance->firmwareSave->CheckFlush();
 
-            emuInstance->drawScreen();
+            emuInstance->drawScreen(); // ui
 
 #ifdef MELONCAP
             MelonCap::Update();
 #endif // MELONCAP
 
-            // if pending frames, run emulation as possible
-            // (ignore audio, draw, some hotkey inputs etc)
-            bool luaMode = emuInstance->luaPendingFrames > 0;
+            // if pending frames and no sync mode, skip synchronization
+            bool skipFrame = emuInstance->luaPendingFrames > 0 && emuInstance->luaSyncMode;
 
-            if (!luaMode) {
+            if (!skipFrame) {
+                // game sync logic (partial?)
 
                 winUpdateCount++;
                 if (winUpdateCount >= winUpdateFreq && !useOpenGL)

@@ -354,13 +354,19 @@ void luaStopEverything() {
     luaOnFrameFunction_stop();
     luaOnPauseFunction_stop();
 
-    // reset lua inputs
-    if (emuInstances[0]) {
-        emuInstances[0]->luaInputMask = 0xFFF;
+    auto instance = emuInstances[0];
+
+    if (instance) {
+        instance->luaInputMask = 0xFFF; // all bits to 1 = no button
+        instance->luaInputActive = false;
+
+        instance->luaPendingFrames = 0; // frame skip to run max speed
+        instance->luaSyncMode = false;
     }
 }
 
 void setup_lua() { //!
+
     LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package, sol::lib::io);
 
     // extern EmuThread* emuThread; // EmuInstance.cpp
@@ -375,9 +381,10 @@ void setup_lua() { //!
     native.set_function("write_s16_le", &write_s16_le);
     native.set_function("write_s32_le", &write_s32_le);
 
-    // NOTE: Does not work! Still trying to figure it out
     native.set_function("setInput", [](std::string input, bool downOrUp) {
-        if (!emuInstances[0]) return;
+        auto instance = emuInstances[0];
+
+        if (!instance) return;
 
         QString lower = QString::fromStdString(input).toLower();
 
@@ -392,35 +399,38 @@ void setup_lua() { //!
 
         if (bit == -1) return; // NOTE: silent fail
 
-        u32 mask = emuInstances[0]->luaInputMask.load();
+        u32 mask = instance->luaInputMask;
 
         if (downOrUp)
             mask &= ~(1u << bit); // pressed
         else
             mask |= (1u << bit); // released
 
-        emuInstances[0]->luaInputMask.store(mask);
+        instance->luaInputMask = mask;
+        instance->luaInputActive = true; // enable if isn't
+
+        nds->SetKeyMask(mask); // set input right away, before a possible frameSkip()
     });
 
     // emulator-related
     native.set_function("setPaused", [](bool pause) {
-        if (emuInstances[0] && emuInstances[0]->getEmuThread())
+        auto instance = emuInstances[0];
+
+        if (instance && instance->getEmuThread())
         {
-            auto thread = emuInstances[0]->getEmuThread();
-            
             if (pause)
-                thread->emuPause();
+                instance->getEmuThread()->emuPause();
             else
-                thread->emuUnpause();
+                instance->getEmuThread()->emuUnpause();
         }
     });
 
     native.set_function("getPaused", []() -> bool {
-        if (emuInstances[0] && emuInstances[0]->getEmuThread())
-        {
-            auto thread = emuInstances[0]->getEmuThread();
-            return !thread->emuIsRunning();
-        }
+        auto instance = emuInstances[0];
+
+        if (instance && instance->getEmuThread())
+            return !emuInstances[0]->getEmuThread()->emuIsRunning();
+        
         return true;
     });
 
@@ -454,16 +464,25 @@ void setup_lua() { //!
 
     // sometimes causes visual glitches with OpenGL renderer
     // edit: perhaps fixed
-    native.set_function("frame_skip", [](int frames) {
+    native.set_function("frame_skip", [](int frames, bool sync) {
         auto instance = emuInstances[0];
-        if (instance && instance->getEmuThread()) {
-            
-            instance->luaPendingFrames.store(frames);
 
-            while (instance->luaPendingFrames.load() > 0)
-                SDL_Delay(1); // skips frames without pause
+        if (instance) {
+
+            // no sync = as fast as possible
+            // sync = normal framerate (e.g: 60 fps with limited fps at default speed)
+
+            instance->luaSyncMode = sync;
+            instance->luaPendingFrames = frames;
+
+            while (instance->luaPendingFrames > 0);
+                SDL_Delay(1); // skip frames without pause
+            
+            instance->luaSyncMode = false;
         }
     });
+
+    // TODO: implement blocking or non-blocking wait()
 
     native.set_function("reset", []() {
         if (emuInstances[0] && emuInstances[0]->getEmuThread())

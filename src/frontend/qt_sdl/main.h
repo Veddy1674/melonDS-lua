@@ -32,6 +32,7 @@
 #include "MPInterface.h"
 
 #include <sol/sol.hpp>
+#include <queue>
 
 using namespace melonDS;
 
