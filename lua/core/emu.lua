@@ -51,6 +51,11 @@ function emu.setInput(input, downOrUp)
     return native.setInput(input, downOrUp)
 end
 
+-- Sets all inputs to false (up)
+function emu.resetInput()
+    return native.resetInput()
+end
+
 -- Returns time in milliseconds
 function emu.time()
     return native.time()

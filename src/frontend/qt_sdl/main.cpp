@@ -383,7 +383,6 @@ void setup_lua() { //!
 
     native.set_function("setInput", [](std::string input, bool downOrUp) {
         auto instance = emuInstances[0];
-
         if (!instance) return;
 
         QString lower = QString::fromStdString(input).toLower();
@@ -410,6 +409,16 @@ void setup_lua() { //!
         instance->luaInputActive = true; // enable if isn't
 
         nds->SetKeyMask(mask); // set input right away, before a possible frameSkip()
+    });
+
+    native.set_function("resetInput", []() {
+        auto instance = emuInstances[0];
+        if (!instance) return;
+
+        instance->luaInputMask = 0xFFF; // disable al l
+        instance->luaInputActive = true; // enable if isn't
+
+        nds->SetKeyMask(0xFFF);
     });
 
     // emulator-related
