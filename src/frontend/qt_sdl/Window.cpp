@@ -1442,6 +1442,7 @@ void MainWindow::onRunScript()
         isAScriptRunning = true;
     } catch (const sol::error& e) {
         printf("[LUA] Lua error: %s\n", e.what());
+        luaStopEverything();
     }
 }
 
