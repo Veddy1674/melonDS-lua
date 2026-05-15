@@ -270,8 +270,7 @@ bool MelonApplication::event(QEvent *event)
     return QApplication::event(event);
 }
 
-extern sol::state LUA;
-sol::state LUA;
+sol::state LUA; // extern
 
 sol::protected_function luaOnFrameCallback; // extern
 sol::protected_function luaOnPauseCallback; // extern
@@ -354,6 +353,11 @@ void luaOnPauseFunction_stop() { // extern
 void luaStopEverything() {
     luaOnFrameFunction_stop();
     luaOnPauseFunction_stop();
+
+    // reset lua inputs
+    if (emuInstances[0]) {
+        emuInstances[0]->luaInputMask = 0xFFF;
+    }
 }
 
 void setup_lua() { //!
@@ -372,85 +376,31 @@ void setup_lua() { //!
     native.set_function("write_s32_le", &write_s32_le);
 
     // NOTE: Does not work! Still trying to figure it out
-    /*native.set_function("setInput", [](std::string input, bool downOrUp) {
+    native.set_function("setInput", [](std::string input, bool downOrUp) {
+        if (!emuInstances[0]) return;
 
-        if (emuInstances[0] == nullptr) return -1; // NOTE: silent fail
+        QString lower = QString::fromStdString(input).toLower();
 
-        auto emuInstance = emuInstances[0];
-        
-        int index = -1;
-        auto lower = QString(input.c_str()).toLower();
-        printf("lower: %s\n", lower.toStdString().c_str());
-        
-        for (int i = 0; i < 12; i++) { // 12 if the length of the two arrays
-            // case insensitive
+        // find input index in dskeylabels and corresponding bit in dskeyorder
+        int bit = -1;
+        for (int i = 0; i < 12; i++) {
             if (QString(dskeylabels[i]).toLower() == lower) {
-                printf("index: %d\n", i);
-                index = i;
+                bit = dskeyorder[i];
                 break;
             }
         }
-        
-        if (index == -1) return -1; // NOTE: silent fail
-        
-        u32 keysState = emuInstance->getInputMask(); // get
 
-        auto bit = dskeyorder[index];
-        
-        // edit
-        if (downOrUp) {
-            keysState &= ~(1 << bit);
-        } else {
-            keysState |= (1 << bit);
-        }
+        if (bit == -1) return; // NOTE: silent fail
 
-        emuInstance->setInputMask(keysState); // set
+        u32 mask = emuInstances[0]->luaInputMask.load();
 
-        return 0;
-    });*/
+        if (downOrUp)
+            mask &= ~(1u << bit); // pressed
+        else
+            mask |= (1u << bit); // released
 
-    native.set_function("s", [](std::string input, bool downOrUp) {
-    // Usa NDS::Current invece della variabile globale nds
-    melonDS::NDS* currentNDS = melonDS::NDS::Current;
-    
-    if (!currentNDS) {
-        printf("ERROR: NDS::Current is NULL!\n");
-        return -1;
-    }
-    
-    int index = -1;
-    std::string lowerInput = input;
-    for (char &c : lowerInput) c = tolower(c);
-    
-    for (int i = 0; i < 12; i++) {
-        std::string label = dskeylabels[i];
-        for (char &c : label) c = tolower(c);
-        
-        if (label == lowerInput) {
-            index = i;
-            break;
-        }
-    }
-    
-    if (index == -1) return -1;
-    
-    int bit = dskeyorder[index];
-    
-    // Leggi lo stato corrente da NDS::Current
-    u32 keysState = currentNDS->KeyInput;
-    
-    if (downOrUp) {
-        keysState &= ~(1 << bit);
-        printf("%s DOWN (bit %d)\n", input.c_str(), bit);
-    } else {
-        keysState |= (1 << bit);
-        printf("%s UP (bit %d)\n", input.c_str(), bit);
-    }
-    
-    currentNDS->SetKeyMask(keysState);
-    
-    return 0;
-});
+        emuInstances[0]->luaInputMask.store(mask);
+    });
 
     // emulator-related
     native.set_function("setPaused", [](bool pause) {
@@ -503,9 +453,16 @@ void setup_lua() { //!
     });
 
     // sometimes causes visual glitches with OpenGL renderer
-    native.set_function("frame_advance", [](int frames) {
-        for (int i = 0; i < frames; i++)
-            nds->RunFrame();
+    // edit: perhaps fixed
+    native.set_function("frame_skip", [](int frames) {
+        auto instance = emuInstances[0];
+        if (instance && instance->getEmuThread()) {
+            
+            instance->luaPendingFrames.store(frames);
+
+            while (instance->luaPendingFrames.load() > 0)
+                SDL_Delay(1); // skips frames without pause
+        }
     });
 
     native.set_function("reset", []() {

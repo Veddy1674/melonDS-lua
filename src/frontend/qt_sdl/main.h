@@ -75,7 +75,9 @@ void write_s8_le(u32 address, u8 value);
 void write_s16_le(u32 address, u16 value);
 void write_s32_le(u32 address, u32 value);
 
-// lua-related
+// lua-related:
+extern sol::state LUA;
+
 extern void luaStopEverything();
 
 extern sol::protected_function luaOnFrameCallback;

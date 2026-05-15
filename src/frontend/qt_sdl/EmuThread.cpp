@@ -253,7 +253,12 @@ void EmuThread::run()
             }
 
             // process input and hotkeys
-            emuInstance->nds->SetKeyMask(emuInstance->inputMask);
+            u32 keys = emuInstance->inputMask;
+
+            // TODO: check for a boolean?
+            keys &= emuInstance->luaInputMask; // merge
+
+            emuInstance->nds->SetKeyMask(keys);
 
             if (emuInstance->isTouching)
                 emuInstance->nds->TouchScreen(emuInstance->touchX, emuInstance->touchY);
@@ -307,6 +312,9 @@ void EmuThread::run()
             else
             {
                 nlines = emuInstance->nds->RunFrame();
+
+                if (emuInstance->luaPendingFrames > 0)
+                    emuInstance->luaPendingFrames--;
             }
 
             if (emuInstance->ndsSave)
@@ -324,103 +332,110 @@ void EmuThread::run()
             MelonCap::Update();
 #endif // MELONCAP
 
-            winUpdateCount++;
-            if (winUpdateCount >= winUpdateFreq && !useOpenGL)
-            {
-                emit windowUpdate();
-                winUpdateCount = 0;
-            }
-            
-            if (emuInstance->hotkeyPressed(HK_FastForwardToggle)) emuInstance->fastForwardToggled = !emuInstance->fastForwardToggled;
-            if (emuInstance->hotkeyPressed(HK_SlowMoToggle)) emuInstance->slowmoToggled = !emuInstance->slowmoToggled;
+            // if pending frames, run emulation as possible
+            // (ignore audio, draw, some hotkey inputs etc)
+            bool luaMode = emuInstance->luaPendingFrames > 0;
 
-            if (emuInstance->hotkeyPressed(HK_AudioMuteToggle)) emuInstance->toggleAudioMute();
+            if (!luaMode) {
 
-            bool enablefastforward = emuInstance->hotkeyDown(HK_FastForward) | emuInstance->fastForwardToggled;
-            bool enableslowmo = emuInstance->hotkeyDown(HK_SlowMo) | emuInstance->slowmoToggled;
-
-            if (useOpenGL)
-            {
-                // when using OpenGL: when toggling fast-forward or slowmo, change the vsync interval
-                if ((enablefastforward || enableslowmo) && !(fastforward || slowmo))
+                winUpdateCount++;
+                if (winUpdateCount >= winUpdateFreq && !useOpenGL)
                 {
-                    emuInstance->setVSyncGL(false);
+                    emit windowUpdate();
+                    winUpdateCount = 0;
                 }
-                else if (!(enablefastforward || enableslowmo) && (fastforward || slowmo))
+                
+                if (emuInstance->hotkeyPressed(HK_FastForwardToggle)) emuInstance->fastForwardToggled = !emuInstance->fastForwardToggled;
+                if (emuInstance->hotkeyPressed(HK_SlowMoToggle)) emuInstance->slowmoToggled = !emuInstance->slowmoToggled;
+
+                if (emuInstance->hotkeyPressed(HK_AudioMuteToggle)) emuInstance->toggleAudioMute();
+
+                bool enablefastforward = emuInstance->hotkeyDown(HK_FastForward) | emuInstance->fastForwardToggled;
+                bool enableslowmo = emuInstance->hotkeyDown(HK_SlowMo) | emuInstance->slowmoToggled;
+
+                if (useOpenGL)
                 {
-                    emuInstance->setVSyncGL(true);
-                }
-            }
-
-            fastforward = enablefastforward;
-            slowmo = enableslowmo;
-            emuInstance->updateFastForwardMute(fastforward);
-
-            if (slowmo) emuInstance->curFPS = emuInstance->slowmoFPS;
-            else if (fastforward) emuInstance->curFPS = emuInstance->fastForwardFPS;
-            else if (!emuInstance->doLimitFPS && !emuInstance->doAudioSync) emuInstance->curFPS = 1000.0;
-            else emuInstance->curFPS = emuInstance->targetFPS;
-
-            if (emuInstance->audioDSiVolumeSync && emuInstance->nds->ConsoleType == 1)
-            {
-                DSi* dsi = static_cast<DSi*>(emuInstance->nds);
-                u8 volumeLevel = dsi->I2C.GetBPTWL()->GetVolumeLevel();
-                if (volumeLevel != dsiVolumeLevel)
-                {
-                    dsiVolumeLevel = volumeLevel;
-                    emit syncVolumeLevel();
+                    // when using OpenGL: when toggling fast-forward or slowmo, change the vsync interval
+                    if ((enablefastforward || enableslowmo) && !(fastforward || slowmo))
+                    {
+                        emuInstance->setVSyncGL(false);
+                    }
+                    else if (!(enablefastforward || enableslowmo) && (fastforward || slowmo))
+                    {
+                        emuInstance->setVSyncGL(true);
+                    }
                 }
 
-                emuInstance->audioVolume = volumeLevel * (256.0 / 31.0);
-            }
+                fastforward = enablefastforward;
+                slowmo = enableslowmo;
+                emuInstance->updateFastForwardMute(fastforward);
 
-            if (emuInstance->doAudioSync && !(fastforward || slowmo))
-                emuInstance->audioSync();
+                if (slowmo) emuInstance->curFPS = emuInstance->slowmoFPS;
+                else if (fastforward) emuInstance->curFPS = emuInstance->fastForwardFPS;
+                else if (!emuInstance->doLimitFPS && !emuInstance->doAudioSync) emuInstance->curFPS = 1000.0;
+                else emuInstance->curFPS = emuInstance->targetFPS;
 
-            double frametimeStep = nlines / (emuInstance->curFPS * 263.0);
-
-            if (frametimeStep < 0.001) frametimeStep = 0.001;
-
-            if (emuInstance->doLimitFPS)
-            {
-                double curtime = SDL_GetPerformanceCounter() * perfCountsSec;
-
-                frameLimitError += frametimeStep - (curtime - lastTime);
-                if (frameLimitError < -frametimeStep)
-                    frameLimitError = -frametimeStep;
-                if (frameLimitError > frametimeStep)
-                    frameLimitError = frametimeStep;
-
-                if (round(frameLimitError * 1000.0) > 0.0)
+                if (emuInstance->audioDSiVolumeSync && emuInstance->nds->ConsoleType == 1)
                 {
-                    SDL_Delay(round(frameLimitError * 1000.0));
-                    double timeBeforeSleep = curtime;
-                    curtime = SDL_GetPerformanceCounter() * perfCountsSec;
-                    frameLimitError -= curtime - timeBeforeSleep;
+                    DSi* dsi = static_cast<DSi*>(emuInstance->nds);
+                    u8 volumeLevel = dsi->I2C.GetBPTWL()->GetVolumeLevel();
+                    if (volumeLevel != dsiVolumeLevel)
+                    {
+                        dsiVolumeLevel = volumeLevel;
+                        emit syncVolumeLevel();
+                    }
+
+                    emuInstance->audioVolume = volumeLevel * (256.0 / 31.0);
                 }
 
-                lastTime = curtime;
-            }
+                if (emuInstance->doAudioSync && !(fastforward || slowmo))
+                    emuInstance->audioSync();
 
-            nframes++;
-            if (nframes >= 30)
-            {
-                double time = SDL_GetPerformanceCounter() * perfCountsSec;
-                double dt = time - lastMeasureTime;
-                lastMeasureTime = time;
+                double frametimeStep = nlines / (emuInstance->curFPS * 263.0);
 
-                u32 fps = round(nframes / dt);
-                nframes = 0;
+                if (frametimeStep < 0.001) frametimeStep = 0.001;
 
-                float fpstarget = 1.0/frametimeStep;
+                if (emuInstance->doLimitFPS)
+                {
+                    double curtime = SDL_GetPerformanceCounter() * perfCountsSec;
 
-                winUpdateFreq = fps / (u32)round(fpstarget);
-                if (winUpdateFreq < 1)
-                    winUpdateFreq = 1;
-                    
-                double actualfps = (59.8261 * 263.0) / nlines;
-                snprintf(melontitle, sizeof(melontitle), "[%d/%.0f] melonDS " MELONDS_VERSION, fps, actualfps);
-                changeWindowTitle(melontitle);
+                    frameLimitError += frametimeStep - (curtime - lastTime);
+                    if (frameLimitError < -frametimeStep)
+                        frameLimitError = -frametimeStep;
+                    if (frameLimitError > frametimeStep)
+                        frameLimitError = frametimeStep;
+
+                    if (round(frameLimitError * 1000.0) > 0.0)
+                    {
+                        SDL_Delay(round(frameLimitError * 1000.0));
+                        double timeBeforeSleep = curtime;
+                        curtime = SDL_GetPerformanceCounter() * perfCountsSec;
+                        frameLimitError -= curtime - timeBeforeSleep;
+                    }
+
+                    lastTime = curtime;
+                }
+
+                nframes++;
+                if (nframes >= 30)
+                {
+                    double time = SDL_GetPerformanceCounter() * perfCountsSec;
+                    double dt = time - lastMeasureTime;
+                    lastMeasureTime = time;
+
+                    u32 fps = round(nframes / dt);
+                    nframes = 0;
+
+                    float fpstarget = 1.0/frametimeStep;
+
+                    winUpdateFreq = fps / (u32)round(fpstarget);
+                    if (winUpdateFreq < 1)
+                        winUpdateFreq = 1;
+                        
+                    double actualfps = (59.8261 * 263.0) / nlines;
+                    snprintf(melontitle, sizeof(melontitle), "[%d/%.0f] melonDS " MELONDS_VERSION, fps, actualfps);
+                    changeWindowTitle(melontitle);
+                }
             }
         }
         else
@@ -747,6 +762,12 @@ void EmuThread::emuFrameStep()
     if (emuPauseStack < emuPauseStackPauseThreshold)
         sendMessage(msg_EmuPause);
     sendMessage(msg_EmuFrameStep);
+    waitAllMessages();
+}
+
+void EmuThread::emuFrameSkip()
+{
+    sendMessage(msg_EmuFrameSkip);
     waitAllMessages();
 }
 

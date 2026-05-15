@@ -63,6 +63,7 @@ public:
         msg_EmuUnpause,
         msg_EmuStop,
         msg_EmuFrameStep,
+        msg_EmuFrameSkip, // like FrameStep but no pause
         msg_EmuReset,
 
         msg_InitGL,
@@ -111,6 +112,7 @@ public:
     void emuStop(bool external);
     void emuExit();
     void emuFrameStep();
+    void emuFrameSkip();
     void emuReset();
 
     int bootROM(const QStringList& filename, QString& errorstr);

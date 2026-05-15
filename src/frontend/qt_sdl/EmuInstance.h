@@ -308,7 +308,10 @@ public:
     EmuThread* emuThread; //!
 
     melonDS::u32 getInputMask() { return inputMask; }
-    melonDS::u32 setInputMask(melonDS::u32 mask) { return inputMask = mask; }
+
+    std::atomic<melonDS::u32> luaInputMask{0xFFF}; // all bits to 1 = no button
+
+    std::atomic<int> luaPendingFrames{0}; // frame skip to run max speed
 
 private:
 

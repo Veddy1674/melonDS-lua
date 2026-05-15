@@ -1431,7 +1431,7 @@ void MainWindow::onRunScript()
     if (isAScriptRunning) {
         // printf("[LUA] Another script is running!\n");
         // return;
-        MainWindow::onStopScript();
+        MainWindow::stopLuaScript(); // no notify of stopped
     }
 
     printf("[LUA] Running script: %s\n", currentScriptPath.toUtf8().constData());
@@ -1469,10 +1469,13 @@ void MainWindow::onStopScript()
 
     printf("[LUA] Stopping script: %s\n", currentScriptPath.toUtf8().constData());
 
-    // NOTE: this does not actually force-stop the script, just unregisters functions called from C++
+    // NOTE: this does not actually force-stop the script, just unregisters functions and resets variables
+    stopLuaScript();
+}
 
+void MainWindow::stopLuaScript() {
+    // stop lua script (if emu is running and such condition must be checked beforehand)
     luaStopEverything();
-
     isAScriptRunning = false;
 }
 

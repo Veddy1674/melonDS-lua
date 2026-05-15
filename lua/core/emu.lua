@@ -28,8 +28,8 @@ function emu.reset()
 end
 
 ---@param frames number|nil
-function emu.frameAdvance(frames)
-    return native.frame_advance(frames or 1)
+function emu.frameSkip(frames)
+    return native.frame_skip(frames or 1)
 end
 
 ---@param path string
@@ -43,11 +43,11 @@ function emu.loadstate(path)
 end
 
 -- unimplemented
--- ---@param input "A"|"B"|"X"|"Y"|"Left"|"Right"|"Up"|"Down"|"L"|"R"|"Select"|"Start"
--- ---@param downOrUp boolean
--- function emu.setInput(input, downOrUp)
---     return native.setInput(input, downOrUp)
--- end
+---@param input "A"|"B"|"X"|"Y"|"Left"|"Right"|"Up"|"Down"|"L"|"R"|"Select"|"Start"
+---@param downOrUp boolean
+function emu.setInput(input, downOrUp)
+    return native.setInput(input, downOrUp)
+end
 
 -- Returns time in milliseconds
 function emu.time()

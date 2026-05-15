@@ -109,6 +109,7 @@ private slots:
     void onOpenScript();
     void onRunScript();
     void onStopScript();
+    void stopLuaScript();
 
     void onClickRecentFile();
     void onClearRecentFiles();
