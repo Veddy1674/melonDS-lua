@@ -34,7 +34,7 @@ void ScriptManager::runScript() {
     }
 
     // printf("[LUA] Running script: %s\n", currentPath.toUtf8().constData());
-    printf("[LUA] Running loaded script");
+    printf("[LUA] Running loaded script...\n");
     
     try {
         running = true;
@@ -66,7 +66,7 @@ void ScriptManager::stopScript() {
         return;
     }
 
-    printf("[LUA] Stopped loaded script");
+    printf("[LUA] Stopped loaded script.\n");
     resetAll(); // running = false
 }
 
