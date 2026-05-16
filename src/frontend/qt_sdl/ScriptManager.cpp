@@ -36,12 +36,110 @@ void ScriptManager::runScript() {
     // printf("[LUA] Running script: %s\n", currentPath.toUtf8().constData());
     printf("[LUA] Running loaded script...\n");
     
-    try {
-        running = true;
-        LUA.script_file(currentPath.toUtf8().constData());
-    }
-    catch (const sol::error& e) {
-        printf("[LUA] Lua error: %s\n", e.what());
+    running = true;
+
+    // run actual script with stacktrace if exception (no try-catch needed):
+
+    // add a function to call when an error occurs (uses debug lib)
+    LUA.script(R"(
+    function __error_handler(err)
+
+        local levels = {}
+        local level = 1
+
+        while true do
+            local info = debug.getinfo(level, "Sl")
+            if not info then break end
+
+            if info.what ~= "C" and info.short_src ~= '[string "..."]' then
+
+                local src = info.source
+                if src:sub(1,1) == "@" then
+                    src = src:sub(2)
+                    
+                    local i, start = nil, 1
+                    while true do
+                        local ni = src:find("lua/", start)
+                        if not ni then break end
+                        i = ni
+                        start = ni + 1
+                    end
+
+                    if i then src = src:sub(i) end
+                end
+                table.insert(levels, {src = src, line = info.currentline})
+            end
+            level = level + 1
+        end
+        return {msg = tostring(err), levels = levels}
+    end
+    )");
+
+    LUA.globals()["__script_path"] = currentPath.toUtf8().constData();
+
+    // run script safely via xpcall, and run __error_handler if an exception occurs
+    LUA.safe_script(R"(
+        local ok, data = xpcall(function()
+            dofile(__script_path)
+        end, __error_handler)
+        __lua_error = ok and nil or data
+    )", sol::script_pass_on_error); // SYNC!
+
+    sol::optional<sol::table> errData = LUA.globals()["__lua_error"];
+
+    // if exception
+    if (errData && errData.value().valid()) {
+        sol::table data = errData.value();
+        std::string msg = data["msg"].get_or<std::string>("<unknown error>");
+
+        auto normalizePath = [](const std::string& s) -> std::string {
+            size_t i = std::string::npos;
+            size_t ni, start = 0;
+
+            // make path more compact (till lua/) TODO: revise
+            while ((ni = s.find("lua/", start)) != std::string::npos)
+            {
+                i = ni;
+                start = ni + 1;
+            }
+
+            return i != std::string::npos ? s.substr(i) : s;
+        };
+
+        // clean up error message
+        std::string cleanMsg = msg;
+        size_t c1 = msg.find(':');
+
+        if (c1 != std::string::npos) {
+            size_t c2 = msg.find(':', c1 + 1);
+
+            if (c2 != std::string::npos)
+                cleanMsg = msg.substr(c2 + 2);
+        }
+
+        sol::table levels = data["levels"];
+        int n = (int)levels.size();
+
+        std::string errorLocation = "?";
+
+        if (n > 0) {
+            sol::table last = levels[n];
+            errorLocation = last["src"].get_or<std::string>("?") + ":" + std::to_string(last["line"].get_or(-1));
+        }
+
+        printf("[LUA] Error: %s %s\n", errorLocation.c_str(), cleanMsg.c_str());
+        printf("Stacktrace:\n");
+
+        for (int i = 1; i <= n; i++) {
+            sol::table entry = levels[i];
+            std::string src = entry["src"].get_or<std::string>("?");
+
+            int line = entry["line"].get_or(-1);
+
+            // add "(main)" to most recent entry
+            printf(i == n ? "- %s:%d (main)\n" : "- %s:%d\n", src.c_str(), line);
+        }
+
         resetAll(); // running = false
     }
 }
@@ -124,7 +222,7 @@ static EmuThread* getEmuThread() {
 
 void ScriptManager::setupLua() {
     // set libraries (avoid os for security)
-    LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package, sol::lib::io);
+    LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package, sol::lib::io, sol::lib::debug);
 
     // create a global table "native" that contains everything
     sol::table native = LUA.create_table();
