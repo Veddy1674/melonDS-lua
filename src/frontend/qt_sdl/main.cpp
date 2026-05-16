@@ -65,14 +65,9 @@
 #include "Net_PCap.h"
 #include "Net_Slirp.h"
 
-#include <sol/sol.hpp>
-#include "NDS.h"
-#include <InputConfig/InputConfigDialog.h>
-
 using namespace melonDS;
 
 QString* systemThemeName;
-
 
 QString emuDirectory;
 
@@ -85,8 +80,10 @@ bool camStarted[2];
 std::optional<LibPCap> pcap;
 Net net;
 
-NDS* nds = nullptr; //! assigned in EmuInstance::loadRom() after updateConsole()
+NDS* nds = nullptr;
 QElapsedTimer sysTimer;
+
+ScriptManager scriptManager;
 
 void NetInit()
 {
@@ -270,300 +267,6 @@ bool MelonApplication::event(QEvent *event)
     return QApplication::event(event);
 }
 
-sol::state LUA; // extern
-
-sol::protected_function luaOnFrameCallback; // extern
-sol::protected_function luaOnPauseCallback; // extern
-
-// executes a lua protected function safely, manages exceptions: returns nil if an exception occurs, otherwise the function result
-template<typename... Args>
-sol::object safeExecuteCallback(sol::protected_function& callback, Args&&... args) {
-    if (!callback.valid()) {
-        return sol::nil;
-    }
-    
-    try {
-        // accept function args
-        sol::protected_function_result result = callback(std::forward<Args>(args)...);
-        
-        if (result.valid()) {
-            return result;
-        } else {
-            sol::error err = result;
-
-            printf("[LUA] Callback error: %s\n", err.what());
-            luaStopEverything();
-
-            return sol::nil;
-        }
-        
-    } catch (const std::exception& e) {
-        printf("[LUA] Exception: %s\n", e.what());
-        luaStopEverything();
-
-        return sol::nil;
-    } catch (...) {
-        printf("[LUA] Unknown exception\n");
-        luaStopEverything();
-
-        return sol::nil;
-    }
-}
-
-void luaOnFrameFunction() { // extern
-    auto result = safeExecuteCallback(luaOnFrameCallback);
-
-    // if is string and is "unregister"
-    if (result.is<std::string>()) {
-        auto str = result.as<std::string>();
-
-        // TODO: add multi return support so that you can unregister anything
-        // e.g: return "unregisterOnPause", "unregisterOnFrame";
-
-        if (str == "unregister")
-            luaOnFrameFunction_stop();
-
-        else if (str == "unregisterAll")
-            luaStopEverything();
-    }
-}
-
-void luaOnPauseFunction(bool pausing) { // extern
-    auto result = safeExecuteCallback(luaOnPauseCallback, pausing);
-
-    if (result.is<std::string>()) {
-        auto str = result.as<std::string>();
-
-        if (str == "unregister")
-            luaOnPauseFunction_stop();
-            
-        else if (str == "unregisterAll")
-            luaStopEverything();
-    }
-}
-
-void luaOnFrameFunction_stop() { // extern
-    luaOnFrameCallback = sol::nil;
-}
-
-void luaOnPauseFunction_stop() { // extern
-    luaOnPauseCallback = sol::nil;
-}
-
-void luaStopEverything() {
-    luaOnFrameFunction_stop();
-    luaOnPauseFunction_stop();
-
-    auto instance = emuInstances[0];
-
-    if (instance) {
-        instance->luaInputMask = 0xFFF; // all bits to 1 = no button
-        instance->luaInputActive = false;
-
-        instance->luaPendingFrames = 0; // frame skip to run max speed
-        instance->luaSyncMode = false;
-    }
-}
-
-void setup_lua() { //!
-
-    LUA.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::package, sol::lib::io);
-
-    // extern EmuThread* emuThread; // EmuInstance.cpp
-    // LUA.set_function("pause", &emuThread->emuPause);
-    
-    sol::table native = LUA.create_table();
-    // memory-related
-    native.set_function("read_s8_le", &read_s8_le);
-    native.set_function("read_s16_le", &read_s16_le);
-    native.set_function("read_s32_le", &read_s32_le);
-    native.set_function("write_s8_le", &write_s8_le);
-    native.set_function("write_s16_le", &write_s16_le);
-    native.set_function("write_s32_le", &write_s32_le);
-
-    native.set_function("setInput", [](std::string input, bool downOrUp) {
-        auto instance = emuInstances[0];
-        if (!instance) return;
-
-        QString lower = QString::fromStdString(input).toLower();
-
-        // find input index in dskeylabels and corresponding bit in dskeyorder
-        int bit = -1;
-        for (int i = 0; i < 12; i++) {
-            if (QString(dskeylabels[i]).toLower() == lower) {
-                bit = dskeyorder[i];
-                break;
-            }
-        }
-
-        if (bit == -1) return; // NOTE: silent fail
-
-        u32 mask = instance->luaInputMask;
-
-        if (downOrUp)
-            mask &= ~(1u << bit); // pressed
-        else
-            mask |= (1u << bit); // released
-
-        instance->luaInputMask = mask;
-        instance->luaInputActive = true; // enable if isn't
-
-        nds->SetKeyMask(mask); // set input right away, before a possible frameSkip()
-    });
-
-    native.set_function("resetInput", []() {
-        auto instance = emuInstances[0];
-        if (!instance) return;
-
-        instance->luaInputMask = 0xFFF; // disable al l
-        instance->luaInputActive = true; // enable if isn't
-
-        nds->SetKeyMask(0xFFF);
-    });
-
-    // emulator-related
-    native.set_function("setPaused", [](bool pause) {
-        auto instance = emuInstances[0];
-
-        if (instance && instance->getEmuThread())
-        {
-            if (pause)
-                instance->getEmuThread()->emuPause();
-            else
-                instance->getEmuThread()->emuUnpause();
-        }
-    });
-
-    native.set_function("getPaused", []() -> bool {
-        auto instance = emuInstances[0];
-
-        if (instance && instance->getEmuThread())
-            return !emuInstances[0]->getEmuThread()->emuIsRunning();
-        
-        return true;
-    });
-
-    native.set_function("onPause", [](sol::protected_function callback) {
-        luaOnPauseCallback = callback;
-    });
-
-
-    native.set_function("onFrame", [](sol::protected_function callback) {
-        luaOnFrameCallback = callback;
-    });
-
-    // for software renderer, NOT OPENGL
-    native.set_function("get_screen", [](int screen_index) -> sol::object {
-        auto& renderer = nds->GPU.GetRenderer();
-        void* fb_top = nullptr;
-        void* fb_bottom = nullptr;
-        
-        bool usesRamFramebuffers = renderer.GetFramebuffers(&fb_top, &fb_bottom);
-        
-        // if software renderer
-        if (usesRamFramebuffers && fb_top && fb_bottom) {
-
-            void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
-            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8, roughly 196,608 bytes (196kb)
-
-            return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
-        }
-        return sol::nil;
-    });
-
-    // sometimes causes visual glitches with OpenGL renderer
-    // edit: perhaps fixed
-    native.set_function("frame_skip", [](int frames, bool sync) {
-        auto instance = emuInstances[0];
-
-        if (instance) {
-
-            // no sync = as fast as possible
-            // sync = normal framerate (e.g: 60 fps with limited fps at default speed)
-
-            instance->luaSyncMode = sync;
-            instance->luaPendingFrames = frames;
-
-            while (instance->luaPendingFrames > 0);
-                SDL_Delay(1); // skip frames without pause
-            
-            instance->luaSyncMode = false;
-        }
-    });
-
-    // TODO: implement blocking or non-blocking wait()
-
-    native.set_function("reset", []() {
-        if (emuInstances[0] && emuInstances[0]->getEmuThread())
-        {
-            auto thread = emuInstances[0]->getEmuThread();
-            thread->emuReset();
-        }
-    });
-
-    native.set_function("savestate_file", [](QString path) {
-        if (emuInstances[0] && emuInstances[0]->getEmuThread())
-        {
-            auto thread = emuInstances[0]->getEmuThread();
-            return thread->saveState(path);
-        }
-        return -1;
-    });
-
-    native.set_function("loadstate_file", [](QString path) {
-        if (emuInstances[0] && emuInstances[0]->getEmuThread())
-        {
-            auto thread = emuInstances[0]->getEmuThread();
-            return thread->loadState(path);
-        }
-        return -1;
-    });
-
-    // time in milliseconds
-    native.set_function("time", []() -> int {
-        return sysTimer.elapsed();
-    });
-
-    LUA["native"] = native;
-
-    // so that files in 'core/' and nearby are found
-    LUA.script(R"(
-        package.path = package.path .. ";" .. "lua/?.lua"
-    )");
-}
-
-// read memory
-// Nelle tue funzioni di binding Lua
-int read_s8_le(u32 address) {
-    if (address == -1) return -1;
-    return nds->ARM9Read8(address);
-}
-
-int read_s16_le(u32 address) {
-    if (address == -1) return -1;
-    return nds->ARM9Read16(address);
-}
-
-int read_s32_le(u32 address) {
-    if (address == -1) return -1;
-    return nds->ARM9Read32(address);
-}
-
-void write_s8_le(u32 address, u8 value) {
-    if (address == -1) return;
-    nds->ARM9Write8(address, value);
-}
-
-void write_s16_le(u32 address, u16 value) {
-    if (address == -1) return;
-    nds->ARM9Write16(address, value);
-}
-
-void write_s32_le(u32 address, u32 value) {
-    if (address == -1) return;
-    nds->ARM9Write32(address, value);
-}
-
 int main(int argc, char** argv)
 {
     sysTimer.start();
@@ -582,8 +285,8 @@ int main(int argc, char** argv)
     printf("melonDS " MELONDS_VERSION " - With LUA Scripting\n");
     printf(MELONDS_URL "\n");
 
-    //! lua init
-    setup_lua();
+    // lua init
+    scriptManager.setupLua();
 
     // easter egg - not worth checking other cases for something so dumb
     if (argc != 0 && (!strcasecmp(argv[0], "derpDS") || !strcasecmp(argv[0], "./derpDS")))

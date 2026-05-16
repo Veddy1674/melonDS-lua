@@ -252,8 +252,8 @@ void EmuThread::run()
                 emuInstance->renderLock.unlock();
             }
 
-            // process input and hotkeys
-            if (!emuInstance->luaInputActive.load())
+            // process input and hotkeys if not blocked
+            if (!scriptManager.externalInputsBlocked())
                 emuInstance->nds->SetKeyMask(emuInstance->inputMask);
 
             if (emuInstance->isTouching)
@@ -308,10 +308,11 @@ void EmuThread::run()
             {
                 nlines = emuInstance->nds->RunFrame();
 
-                if (emuInstance->luaPendingFrames > 0)
-                    emuInstance->luaPendingFrames--;
+                // decrease counter of pending frames that lua asked to be processed
+                scriptManager.processPendingFrames();
                 
-                // TODO: calling luaOnFrameFunction() here is more appropriate?
+                // call onFrame
+                scriptManager.onFrame();
             }
 
             if (emuInstance->ndsSave)
@@ -329,12 +330,9 @@ void EmuThread::run()
             MelonCap::Update();
 #endif // MELONCAP
 
-            // if pending frames and no sync mode, skip synchronization
-            bool skipSync = emuInstance->luaPendingFrames > 0 && !emuInstance->luaSyncMode;
-
-            if (!skipSync) {
-                // game sync logic (partial?)
-
+            // if pending frames and no-sync-mode, skip synchronization
+            if (!scriptManager.shouldSkipSync())
+            {
                 winUpdateCount++;
                 if (winUpdateCount >= winUpdateFreq && !useOpenGL)
                 {
@@ -720,7 +718,7 @@ void EmuThread::emuPause(bool broadcast)
     if (broadcast)
         emuInstance->broadcastCommand(InstCmd_Pause);
     
-    luaOnPauseFunction(true);
+    scriptManager.onPause(true);
 }
 
 void EmuThread::emuUnpause(bool broadcast)
@@ -731,7 +729,7 @@ void EmuThread::emuUnpause(bool broadcast)
     if (broadcast)
         emuInstance->broadcastCommand(InstCmd_Unpause);
     
-    luaOnPauseFunction(false);
+    scriptManager.onPause(false);
 }
 
 void EmuThread::emuTogglePause(bool broadcast)

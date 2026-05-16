@@ -85,8 +85,6 @@
 
 using namespace melonDS;
 
-QString currentScriptPath = ""; // init
-
 extern CameraManager* camManager[2];
 extern bool camStarted[2];
 
@@ -671,18 +669,19 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
                     dialog.exec();
                 });
         }  
-        { //!
+        {
             QMenu * menu = menubar->addMenu("Scripting");
 
-            actSelectScript = menu->addAction("Select Script...");
-            connect(actSelectScript, &QAction::triggered, this, &MainWindow::onOpenScript);
+            actLoadScript = menu->addAction("Load Script...");
+            connect(actLoadScript, &QAction::triggered, this, &MainWindow::onOpenScript);
 
-            actRunScript = menu->addAction("Run Selected Script");
+            actRunScript = menu->addAction("Run Loaded Script");
             connect(actRunScript, &QAction::triggered, this, &MainWindow::onRunScript);
 
-            actStopScript = menu->addAction("Stop Selected Script");
+            actStopScript = menu->addAction("Stop Loaded Script");
             connect(actStopScript, &QAction::triggered, this, &MainWindow::onStopScript);
         }
+
         setMenuBar(menubar);
         
         if (localCfg.GetString("Firmware.Username") == "Arisotura")
@@ -1395,89 +1394,36 @@ void MainWindow::onOpenFile()
     updateCartInserted(false);
 }
 
-// script related:
-
+// selection/load
 void MainWindow::onOpenScript()
 {
     QStringList file = pickScript();
     if (file.isEmpty())
         return;
 
-    QString scriptPath = file.first();
-    
-    extern QString currentScriptPath;
-    currentScriptPath = scriptPath;
-    
-    printf("Script loaded: %s\n", scriptPath.toUtf8().constData());
+    scriptManager.loadScript(file.first());
 }
 
 void MainWindow::onRunScript()
 {
-    extern QString currentScriptPath;
-    extern sol::state LUA; // main.cpp
-
-    if (currentScriptPath.isEmpty())
-    {
-        printf("[LUA] No script selected!\n");
-        return;
-    }
-    
     if (!emuThread->emuIsActive())
     {
         printf("[LUA] No game is running!\n");
         return;
     }
 
-    if (isAScriptRunning) {
-        // printf("[LUA] Another script is running!\n");
-        // return;
-        MainWindow::stopLuaScript(); // no notify of stopped
-    }
-
-    printf("[LUA] Running script: %s\n", currentScriptPath.toUtf8().constData());
-    
-    // try run
-    try {
-        LUA.script_file(currentScriptPath.toUtf8().constData());
-        isAScriptRunning = true;
-    } catch (const sol::error& e) {
-        printf("[LUA] Lua error: %s\n", e.what());
-        luaStopEverything();
-    }
+    scriptManager.runScript();
 }
 
 void MainWindow::onStopScript()
 {
-    extern QString currentScriptPath;
-    extern sol::state LUA; // main.cpp
-
-    if (currentScriptPath.isEmpty())
-    {
-        printf("[LUA] No script selected!\n");
-        return;
-    }
-    
     if (!emuThread->emuIsActive())
     {
         printf("[LUA] No game is running!\n");
         return;
     }
 
-    if (!isAScriptRunning) {
-        printf("[LUA] No script is running!\n");
-        return;
-    }
-
-    printf("[LUA] Stopping script: %s\n", currentScriptPath.toUtf8().constData());
-
-    // NOTE: this does not actually force-stop the script, just unregisters functions and resets variables
-    stopLuaScript();
-}
-
-void MainWindow::stopLuaScript() {
-    // stop lua script (if emu is running and such condition must be checked beforehand)
-    luaStopEverything();
-    isAScriptRunning = false;
+    scriptManager.stopScript();
 }
 
 void MainWindow::onClearRecentFiles()

@@ -36,14 +36,12 @@
 #include "Screen.h"
 #include "Config.h"
 #include "MPInterface.h"
-
+#include "main.h"
 
 class EmuInstance;
 class EmuThread;
 
 const int kMaxRecentROMs = 10;
-
-extern QString currentScriptPath; //!
 
 class MainWindow : public QMainWindow
 {
@@ -109,7 +107,6 @@ private slots:
     void onOpenScript();
     void onRunScript();
     void onStopScript();
-    void stopLuaScript();
 
     void onClickRecentFile();
     void onClearRecentFiles();
@@ -307,7 +304,7 @@ public:
 
     QAction* actAbout;
     
-    QAction* actSelectScript;
+    QAction* actLoadScript;
     QAction* actRunScript;
     QAction* actStopScript;
 };

@@ -305,13 +305,7 @@ public:
     bool slowmoToggled;
     bool doAudioSync;
 
-    EmuThread* emuThread; //!
-
-    std::atomic<melonDS::u32> luaInputMask{0xFFF}; // all bits to 1 = no button
-    std::atomic<bool> luaInputActive{false}; // whether to apply input mask
-
-    std::atomic<int> luaPendingFrames{0}; // frame skip to run max speed
-    std::atomic<bool> luaSyncMode{false}; // whether to run max speed during frameSkip() (sync or not)
+    EmuThread* emuThread;
 
 private:
 

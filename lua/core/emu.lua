@@ -3,84 +3,110 @@
 local emu = {}
 
 ---@diagnostic disable-next-line: undefined-global
-local native = assert(native, "native module not found")
+local native = assert(native, "'native' module not found")
 
----@param pause boolean
-function emu.setPaused(pause)
-    if emu.getPaused() == pause then return end -- avoid unnecessary calls, which often cause crashes
-    return native.setPaused(pause)
+-- Returns time in milliseconds
+---@return integer
+function emu.time()
+    return native.time()
 end
 
-function emu.getPaused()
-    return native.getPaused()
+-- Stops this script
+function emu.stop()
+    native.stop()
 end
 
--- Sets a function that will be called every pause of any kind (from lua included)<br>
--- If 'func' returns "unregister", the function will be unregistered right away
----@param func fun(pausing: boolean): "unregister"|"unregisterAll"|nil
-function emu.onPause(func)
-    native.onPause(func)
-end
-
--- Resets current game
+-- Resets current running game
 function emu.reset()
-    return native.reset()
+    native.reset()
 end
 
 -- Advances the game by 'frames' number of frames<br>
--- If 'sync' is true, the method will synchronize with the emulator (e.g: wait for the frame limitator), otherwise will run as fast as possible (1ms delay between frame advance requests)
+-- If 'sync' is true, the frame advancing will synchronize with the emulator (slower)
 ---@param frames number|nil
 ---@param sync boolean|nil
 function emu.frameSkip(frames, sync)
     return native.frame_skip(frames or 1, sync or false)
 end
 
----@param path string
-function emu.savestate(path)
-    return native.saveState_file(path)
-end
+-- TODO add a method to enable/disable external inputs
 
----@param path string
-function emu.loadstate(path)
-    return native.loadState_file(path)
-end
-
+-- Forces an input, ignoring external inputs until script is stopped
 ---@param input "A"|"B"|"X"|"Y"|"Left"|"Right"|"Up"|"Down"|"L"|"R"|"Select"|"Start"
 ---@param downOrUp boolean
 function emu.setInput(input, downOrUp)
-    return native.setInput(input, downOrUp)
+    return native.set_input(input, downOrUp)
 end
 
--- Sets all inputs to false (up)
+-- Forces all inputs to false (up)
 function emu.resetInput()
-    return native.resetInput()
+    return native.reset_input()
 end
 
--- Returns time in milliseconds
-function emu.time()
-    return native.time()
+-- Sets emulator state to paused/unpaused if 'pause' is a boolean
+-- Returns current emulator pause state
+---@param pause boolean|nil
+---@return boolean
+function emu.pause(pause)
+    -- already paused/unpaused
+    if pause ~= nil and native.pause() == pause then
+        return pause
+    end
+
+    return native.pause(pause)
 end
 
+-- Sets a function called every pause event of any kind (from emu.pause() too)<br>
+-- If 'func' returns "unregister", the function will be unregistered right away
+---@param func fun(pausing: boolean): "unregister"|"unregisterAll"|nil
+function emu.onPause(func)
+    native.on_pause(func)
+end
+
+-- Sets a function called every game frame<br>
+-- If 'func' returns "unregister", the function will be unregistered right away
+---@param func fun(): "unregister"|"unregisterAll"|nil
+function emu.onFrame(func)
+    native.on_frame(func)
+end
+
+-- Returns current game screen pixel data as a raw string
 ---@param topOrBottom "top"|"bottom"
 function emu.getScreen(topOrBottom)
     return native.get_screen(topOrBottom == "bottom" and 1 or 0)
 end
 
--- Sets a function that will be called every game frame<br>
--- If 'func' returns "unregister", the function will be unregistered right away
----@param func fun(): "unregister"|"unregisterAll"|nil
-function emu.onFrame(func)
-    native.onFrame(func)
+-- Save current game state as a .sav file
+---@param path string
+function emu.savestate(path)
+    return native.saveState_file(path)
 end
 
--- Saves a screenshot as a .raw of 196.608 bytes, RGB
+-- Load game state from a .sav file
+---@param path string
+function emu.loadstate(path)
+    return native.loadState_file(path)
+end
+
+-- Other functions not from native lib:
+
+-- Saves a screenshot .raw file of 196.608 bytes, RGB
 ---@param path string
 ---@param screen "top"|"bottom"
 function emu.screenshot(path, screen)
-    local data = emu.getScreen(screen)
+    local data = emu.getScreen(screen) -- default top
+
     local file = assert(io.open(path, "wb"), "Unable to open file " .. path)
     file:write(data)
     file:close()
+end
+
+-- Utils not related to emulator:
+
+-- print(string.format(<b>...</b>))
+---@diagnostic disable-next-line: lowercase-global
+function printf(...)
+    print(string.format(...))
 end
 
 return emu
