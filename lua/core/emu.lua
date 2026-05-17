@@ -16,6 +16,11 @@ function emu.stop()
     native.stop()
 end
 
+-- Stops the whole emulator process
+function emu.terminate()
+    native.terminate()
+end
+
 -- Resets current running game
 function emu.reset()
     native.reset()
@@ -79,13 +84,13 @@ end
 -- Save current game state as a .sav file
 ---@param path string
 function emu.savestate(path)
-    return native.saveState_file(path)
+    return native.savestate_file(path)
 end
 
 -- Load game state from a .sav file
 ---@param path string
 function emu.loadstate(path)
-    return native.loadState_file(path)
+    return native.loadstate_file(path)
 end
 
 -- Other functions not from native lib:
