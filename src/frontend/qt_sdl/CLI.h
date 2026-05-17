@@ -34,6 +34,11 @@ struct CommandLineOptions
     std::optional<QString> gbaRomArchivePath;
     bool fullscreen;
     bool boot;
+
+    std::optional<int> windowSize; // 1-4x
+    std::optional<int> windowX;
+    std::optional<int> windowY;
+    bool fpsLimit;
 };
 
 extern CommandLineOptions* ManageArgs(QApplication& melon);

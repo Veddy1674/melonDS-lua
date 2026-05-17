@@ -303,7 +303,7 @@ int main(int argc, char** argv)
     MelonApplication melon(argc, argv);
     pathInit();
 
-    CLI::CommandLineOptions* options = CLI::ManageArgs(melon);
+    CLI::CommandLineOptions* cliOptions = CLI::ManageArgs(melon);
 
     // http://stackoverflow.com/questions/14543333/joystick-wont-work-using-sdl
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -387,20 +387,39 @@ int main(int argc, char** argv)
             return path;
         };
 
-        const QStringList dsfile = prepareRomPath(options->dsRomPath, options->dsRomArchivePath);
-        const QStringList gbafile = prepareRomPath(options->gbaRomPath, options->gbaRomArchivePath);
+        const QStringList dsfile = prepareRomPath(cliOptions->dsRomPath, cliOptions->dsRomArchivePath);
+        const QStringList gbafile = prepareRomPath(cliOptions->gbaRomPath, cliOptions->gbaRomArchivePath);
 
         if (memberSyntaxUsed) printf("Warning: use the a.zip|b.nds format at your own risk!\n");
 
-        win->preloadROMs(dsfile, gbafile, options->boot);
+        win->preloadROMs(dsfile, gbafile, cliOptions->boot);
 
-        if (options->fullscreen)
+        if (cliOptions->fullscreen)
             win->toggleFullscreen();
+        
+        if (cliOptions->windowSize.has_value())
+        {
+            int factor = cliOptions->windowSize.value();
+
+            QTimer::singleShot(0, win, [win, factor]() {
+                win->setScreenSize(factor);
+            });
+        }
+
+        if (cliOptions->windowX.has_value() || cliOptions->windowY.has_value())
+        {
+            int x = cliOptions->windowX.value_or(win->x());
+            int y = cliOptions->windowY.value_or(win->y());
+            win->move(x, y);
+        }
+
+        if (!cliOptions->fpsLimit)
+            win->setLimitFramerate(false);
     }
 
     int ret = melon.exec();
 
-    delete options;
+    delete cliOptions;
 
     // if we get here, all the existing emu instances should have been deleted already
     // but with this we make extra sure they are all deleted

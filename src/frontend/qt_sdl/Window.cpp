@@ -2095,11 +2095,15 @@ void MainWindow::onInterfaceSettingsFinished(int res)
     emuThread->emuUnpause();
 }
 
-void MainWindow::onChangeScreenSize()
+void MainWindow::setScreenSize(int factor)
 {
-    int factor = ((QAction*)sender())->data().toInt();
     QSize diff = size() - panel->size();
     resize(panel->screenGetMinSize(factor) + diff);
+}
+
+void MainWindow::onChangeScreenSize()
+{
+    setScreenSize(((QAction*)sender())->data().toInt());
 }
 
 void MainWindow::onChangeScreenRotation(QAction* act)
@@ -2203,9 +2207,14 @@ void MainWindow::onChangeShowOSD(bool checked)
     windowCfg.SetBool("ShowOSD", showOSD);
 }
 
-void MainWindow::onChangeLimitFramerate(bool checked)
+void MainWindow::setLimitFramerate(bool checked)
 {
     emuInstance->doLimitFPS = checked;
+}
+
+void MainWindow::onChangeLimitFramerate(bool checked)
+{
+    setLimitFramerate(checked);
     globalCfg.SetBool("LimitFPS", emuInstance->doLimitFPS);
 }
 

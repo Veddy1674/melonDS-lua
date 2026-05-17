@@ -88,6 +88,10 @@ public:
     void loadRecentFilesMenu(bool loadcfg);
     //void updateVideoSettings(bool glchange);
 
+    // to apply CLI commands:
+    void setScreenSize(int factor);
+    void setLimitFramerate(bool checked);
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;

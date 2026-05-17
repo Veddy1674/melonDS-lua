@@ -44,6 +44,11 @@ CommandLineOptions* ManageArgs(QApplication& melon)
     parser.addOption(QCommandLineOption({"b", "boot"}, "Whether to boot firmware on startup. Defaults to \"auto\" (boot if NDS rom given)", "auto/always/never", "auto"));
     parser.addOption(QCommandLineOption({"f", "fullscreen"}, "Start melonDS in fullscreen mode"));
 
+    parser.addOption(QCommandLineOption({"s", "size"}, "Window size multiplier (1-4)", "size"));
+    parser.addOption(QCommandLineOption({"x", "xpos"}, "Window X position", "x"));
+    parser.addOption(QCommandLineOption({"y", "ypos"}, "Window Y position", "y"));
+    parser.addOption(QCommandLineOption({"n", "maxspeed"}, "Disable FPS limit"));
+
 #ifdef ARCHIVE_SUPPORT_ENABLED
     parser.addOption(QCommandLineOption({"a", "archive-file"}, "Specify file to load inside an archive given (NDS)", "rom"));
     parser.addOption(QCommandLineOption({"A", "archive-file-gba"}, "Specify file to load inside an archive given (GBA)", "rom"));
@@ -51,9 +56,9 @@ CommandLineOptions* ManageArgs(QApplication& melon)
 
     parser.process(melon);
 
-    CommandLineOptions* options = new CommandLineOptions;
+    CommandLineOptions* cliOptions = new CommandLineOptions;
 
-    options->fullscreen = parser.isSet("fullscreen");
+    cliOptions->fullscreen = parser.isSet("fullscreen");
 
     QStringList posargs = parser.positionalArguments();
     switch (posargs.size())
@@ -61,9 +66,9 @@ CommandLineOptions* ManageArgs(QApplication& melon)
         default:
             Log(LogLevel::Warn, "Too many positional arguments; ignoring 3 onwards\n");
         case 2:
-            options->gbaRomPath = posargs[1];
+            cliOptions->gbaRomPath = posargs[1];
         case 1:
-            options->dsRomPath = posargs[0];
+            cliOptions->dsRomPath = posargs[0];
         case 0:
             break;
     }
@@ -71,15 +76,15 @@ CommandLineOptions* ManageArgs(QApplication& melon)
     QString bootMode = parser.value("boot");
     if (bootMode == "auto")
     {
-        options->boot = !posargs.empty();
+        cliOptions->boot = !posargs.empty();
     }
     else if (bootMode == "always")
     {
-        options->boot = true;
+        cliOptions->boot = true;
     }
     else if (bootMode == "never")
     {
-        options->boot = false;
+        cliOptions->boot = false;
     }
     else
     {
@@ -87,12 +92,18 @@ CommandLineOptions* ManageArgs(QApplication& melon)
         exit(1);
     }
 
+    if (parser.isSet("size")) cliOptions->windowSize = parser.value("size").toInt();
+    if (parser.isSet("xpos")) cliOptions->windowX = parser.value("xpos").toInt();
+    if (parser.isSet("ypos")) cliOptions->windowY = parser.value("ypos").toInt();
+
+    cliOptions->fpsLimit = !parser.isSet("maxspeed");
+
 #ifdef ARCHIVE_SUPPORT_ENABLED
     if (parser.isSet("archive-file"))
     {
-        if (options->dsRomPath.has_value())
+        if (cliOptions->dsRomPath.has_value())
         {
-            options->dsRomArchivePath = parser.value("archive-file");
+            cliOptions->dsRomArchivePath = parser.value("archive-file");
         }
         else
         {
@@ -102,9 +113,9 @@ CommandLineOptions* ManageArgs(QApplication& melon)
 
     if (parser.isSet("archive-file-gba"))
     {
-        if (options->gbaRomPath.has_value())
+        if (cliOptions->gbaRomPath.has_value())
         {
-            options->gbaRomArchivePath = parser.value("archive-file-gba");
+            cliOptions->gbaRomArchivePath = parser.value("archive-file-gba");
         }
         else
         {
@@ -113,7 +124,7 @@ CommandLineOptions* ManageArgs(QApplication& melon)
     }
 #endif
 
-    return options;
+    return cliOptions;
 }
 
 }
