@@ -33,7 +33,7 @@ using melonDS::Platform::LogLevel;
 namespace CLI
 {
 
-CommandLineOptions* ManageArgs(QApplication& melon)
+CommandLineOptions* ManageArgs(QApplication& melon, int argc, char** argv)
 {
     QCommandLineParser parser;
     parser.addHelpOption();
@@ -44,10 +44,14 @@ CommandLineOptions* ManageArgs(QApplication& melon)
     parser.addOption(QCommandLineOption({"b", "boot"}, "Whether to boot firmware on startup. Defaults to \"auto\" (boot if NDS rom given)", "auto/always/never", "auto"));
     parser.addOption(QCommandLineOption({"f", "fullscreen"}, "Start melonDS in fullscreen mode"));
 
-    parser.addOption(QCommandLineOption({"s", "size"}, "Window size multiplier (1-4)", "size"));
-    parser.addOption(QCommandLineOption({"x", "xpos"}, "Window X position", "x"));
-    parser.addOption(QCommandLineOption({"y", "ypos"}, "Window Y position", "y"));
-    parser.addOption(QCommandLineOption({"n", "maxspeed"}, "Disable FPS limit"));
+    parser.addOption(QCommandLineOption("winsize", "Window size multiplier (1-4)", "size"));
+    parser.addOption(QCommandLineOption("winx", "Window X position", "x"));
+    parser.addOption(QCommandLineOption("winy", "Window Y position", "y"));
+    parser.addOption(QCommandLineOption("nolimit", "Disable FPS limit"));
+
+    parser.addOption(QCommandLineOption("lua", "Lua script to run on startup", "script"));
+    // found out this might be the best clean alternative to pass args to lua
+    parser.addOption(QCommandLineOption("lua-args", "Arguments to pass to Lua script", "args"));
 
 #ifdef ARCHIVE_SUPPORT_ENABLED
     parser.addOption(QCommandLineOption({"a", "archive-file"}, "Specify file to load inside an archive given (NDS)", "rom"));
@@ -92,11 +96,30 @@ CommandLineOptions* ManageArgs(QApplication& melon)
         exit(1);
     }
 
-    if (parser.isSet("size")) cliOptions->windowSize = parser.value("size").toInt();
-    if (parser.isSet("xpos")) cliOptions->windowX = parser.value("xpos").toInt();
-    if (parser.isSet("ypos")) cliOptions->windowY = parser.value("ypos").toInt();
+    if (parser.isSet("winsize"))
+        cliOptions->winSize = parser.value("winsize").toInt();
 
-    cliOptions->fpsLimit = !parser.isSet("maxspeed");
+    if (parser.isSet("winx"))
+        cliOptions->winX = parser.value("winx").toInt();
+
+    if (parser.isSet("winy"))
+        cliOptions->winY = parser.value("winy").toInt();
+
+    cliOptions->fpsLimit = !parser.isSet("nolimit"); // aka maxspeed
+
+    if (parser.isSet("lua"))
+        cliOptions->luaScript = parser.value("lua");
+
+    cliOptions->luaArgs = {};
+    if (parser.isSet("lua-args"))
+    {
+        QString argsStr = parser.value("lua-args");
+        QStringList args = argsStr.split('|');
+        for (const QString& arg : args)
+            cliOptions->luaArgs.push_back(arg.toStdString());
+    }
+
+    // e.g: ./melonDS $ROM --lua $LUA --lua-args "arg0|arg1"
 
 #ifdef ARCHIVE_SUPPORT_ENABLED
     if (parser.isSet("archive-file"))

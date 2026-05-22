@@ -33,6 +33,8 @@
 
 #include "ScriptManager.h"
 
+#include "CLI.h"
+
 using namespace melonDS;
 
 enum
@@ -68,5 +70,7 @@ void broadcastInstanceCommand(int cmd, QVariant& param, int sourceinst);
 void setMPInterface(melonDS::MPInterfaceType type);
 
 extern ScriptManager scriptManager;
+
+extern CLI::CommandLineOptions* cliOptions;
 
 #endif // MAIN_H

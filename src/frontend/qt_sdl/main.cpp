@@ -85,6 +85,8 @@ QElapsedTimer sysTimer;
 
 ScriptManager scriptManager;
 
+CLI::CommandLineOptions* cliOptions;
+
 void NetInit()
 {
     Config::Table cfg = Config::GetGlobalTable();
@@ -303,7 +305,7 @@ int main(int argc, char** argv)
     MelonApplication melon(argc, argv);
     pathInit();
 
-    CLI::CommandLineOptions* cliOptions = CLI::ManageArgs(melon);
+    cliOptions = CLI::ManageArgs(melon, argc, argv);
 
     // http://stackoverflow.com/questions/14543333/joystick-wont-work-using-sdl
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -397,24 +399,36 @@ int main(int argc, char** argv)
         if (cliOptions->fullscreen)
             win->toggleFullscreen();
         
-        if (cliOptions->windowSize.has_value())
+        if (cliOptions->winSize.has_value())
         {
-            int factor = cliOptions->windowSize.value();
+            int factor = cliOptions->winSize.value();
 
             QTimer::singleShot(0, win, [win, factor]() {
                 win->setScreenSize(factor);
             });
         }
 
-        if (cliOptions->windowX.has_value() || cliOptions->windowY.has_value())
+        if (cliOptions->winX.has_value() || cliOptions->winY.has_value())
         {
-            int x = cliOptions->windowX.value_or(win->x());
-            int y = cliOptions->windowY.value_or(win->y());
+            int x = cliOptions->winX.value_or(win->x());
+            int y = cliOptions->winY.value_or(win->y());
             win->move(x, y);
         }
 
         if (!cliOptions->fpsLimit)
             win->setLimitFramerate(false);
+        
+        // load and run lua script from cli args (by now game is running)
+        if (cliOptions->luaScript.has_value())
+        {
+            scriptManager.loadScript(*cliOptions->luaScript);
+            scriptManager.setLuaArgs(cliOptions->luaArgs);
+            
+            // run script in a separate thread
+            std::thread([&]() {
+                scriptManager.runScript();
+            }).detach();
+        }
     }
 
     int ret = melon.exec();

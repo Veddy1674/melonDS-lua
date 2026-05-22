@@ -108,6 +108,8 @@ public:
     void emuRun();
     void emuPause(bool broadcast = true);
     void emuUnpause(bool broadcast = true);
+    void emuForcePause(); // for lua, to avoid message system
+    void emuForceUnpause(); // for lua, to avoid message system
     void emuTogglePause(bool broadcast = true);
     void emuStop(bool external);
     void emuExit();

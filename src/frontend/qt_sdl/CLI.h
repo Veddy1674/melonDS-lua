@@ -35,13 +35,16 @@ struct CommandLineOptions
     bool fullscreen;
     bool boot;
 
-    std::optional<int> windowSize; // 1-4x
-    std::optional<int> windowX;
-    std::optional<int> windowY;
+    std::optional<int> winSize; // 1-4x
+    std::optional<int> winX;
+    std::optional<int> winY;
     bool fpsLimit;
+
+    std::optional<QString> luaScript;
+    std::vector<std::string> luaArgs;
 };
 
-extern CommandLineOptions* ManageArgs(QApplication& melon);
+extern CommandLineOptions* ManageArgs(QApplication& melon, int argc, char** argv);
 
 }
 

@@ -1644,8 +1644,6 @@ void NDS::MonitorARM9Jump(u32 addr)
         {
             Log(LogLevel::Info, "Game is now booting\n");
             RunningGame = true;
-
-            //! lua scripts can run from now on
         }
     }
 }

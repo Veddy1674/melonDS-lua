@@ -10,7 +10,17 @@ ScriptManager::ScriptManager() : running(false) {}
 
 void ScriptManager::loadScript(const QString& path) {
     currentPath = path;
-    printf("[LUA}] Script loaded: %s\n", currentPath.toUtf8().constData());
+    printf("[LUA] Script loaded: %s\n", currentPath.toUtf8().constData());
+}
+
+void ScriptManager::setLuaArgs(const std::vector<std::string>& args)
+{
+    sol::table arg = LUA.create_table();
+
+    for (int i = 0; i < (int)args.size(); i++)
+        arg[i+1] = args[i]; // 1-indexed
+    
+    LUA.set("arg", arg);
 }
 
 void ScriptManager::runScript() {
@@ -27,6 +37,7 @@ void ScriptManager::runScript() {
         printf("[LUA] No game is running!\n");
         return;
     }
+    // after here, it is guaranteed that emuInstance[0] and its thread are valid
 
     if (running) {
         // (no print)
@@ -208,16 +219,6 @@ static void write_s32_le(u32 address, u32 value) {
 
 #pragma region private utils
 
-static EmuThread* getEmuThread() {
-    auto* inst = emuInstances[0];
-    if (!inst) return nullptr;
-
-    auto* thread = inst->getEmuThread();
-    if (!thread) return nullptr;
-
-    return thread;
-}
-
 #pragma endregion
 
 void ScriptManager::setupLua() {
@@ -248,26 +249,47 @@ void ScriptManager::setupLua() {
         this->resetAll(); // running = false
     });
 
-    // untested, to reset current game
+    // end the whole emulator process
+    native.set_function("terminate", []()
+    {
+        // ends melon.exec()
+        QApplication::quit();
+    });
+
+    // reset current game
     native.set_function("reset", []()
     {
-        if (auto* thread = getEmuThread())
-            thread->emuReset();
+        emuInstances[0]->getEmuThread()->emuReset();
     });
 
     // emulate a number of frames in the game
-    native.set_function("frame_skip", [this](int frames, bool sync)
+    // (to synchronize lua to the emulator, NOT VICEVERSA)
+    native.set_function("frame_skip", [this](int frames)
     {
-        // no sync = as fast as possible
-        // sync = normal framerate (e.g: 60 fps with limited fps at default speed)
-
-        this->luaSyncMode = sync;
-        this->luaPendingFrames = frames;
-
-        while (this->luaPendingFrames > 0);
-            SDL_Delay(1); // skip frames without pausing unlike frame advance/step
+        std::unique_lock<std::mutex> lock(this->frameMutex);
         
-        this->luaSyncMode = false;
+        // frame_skip(1) effectively works as a sync wait for lua that does nothing
+        // instead frame_skip(x > 1) emulates x frames as fast as possible
+        luaPendingFrames = frames;
+
+        // block lua until the frames are emulated
+        frameCond.wait(lock, [this] {
+            return luaPendingFrames == 0;
+        });
+    });
+
+    // essentially the opposite of frame_skip: synchronizes the emulator to lua
+    // it should only be called when the emulator is paused to avoid crashes
+    native.set_function("frame_step", [this](int frames)
+    {
+        // if not paused return
+        if (emuInstances[0]->getEmuThread()->emuIsRunning()) {
+            printf("[LUA] 'frame_step' should only be called when the emulator is paused!\n");
+            return;
+        }
+
+        for (int i = 0; i < frames; i++)
+            nds->RunFrame();
     });
 
     native.set_function("set_input", [this](std::string input, bool downOrUp)
@@ -311,26 +333,23 @@ void ScriptManager::setupLua() {
     // emu.pause(true) -- pauses emu, returns true
     // emu.pause(false) -- unpauses emu, returns false
     native.set_function("pause", [](sol::optional<bool> state) -> bool {
-        if (auto* thread = getEmuThread())
+        auto* thread = emuInstances[0]->getEmuThread();
+        
+        // setter
+        if (state.has_value())
         {
-            // setter
-            if (state.has_value())
-            {
-                if (pause) {
-                    thread->emuPause();
-                    return true;
-                }
-                else {
-                    thread->emuUnpause();
-                    return false;
-                }
+            if (state.value()) {
+                thread->emuPause();
+                return true;
             }
-
-            // getter
-            return !thread->emuIsRunning();
+            else {
+                thread->emuUnpause();
+                return false;
+            }
         }
 
-        return false;
+        // getter
+        return !thread->emuIsRunning();
     });
 
     native.set_function("on_pause", [this](sol::protected_function callback) {
@@ -354,29 +373,27 @@ void ScriptManager::setupLua() {
         if (usesRamFramebuffers && fb_top && fb_bottom) {
 
             void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
-            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8, roughly 196,608 bytes (196kb)
+            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8, 196,608 bytes (196kb)
 
             return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
+        } else {
+            printf("[LUA] Only Software Renderer is supported for 'get_screen()' function\n");
         }
         return sol::nil;
     });
 
-    // save to .sav, return success
+    // save as file, return success
     native.set_function("savestate_file", [](std::string path) -> bool
     {
-        if (auto* thread = getEmuThread())
-            return thread->saveState(QString::fromStdString(path));
-
-        return false;
+        return emuInstances[0]->getEmuThread()
+            ->saveState(QString::fromStdString(path));
     });
 
-    // load a .sav, return success
+    // load as file, return success
     native.set_function("loadstate_file", [](std::string path) -> bool
     {
-        if (auto* thread = getEmuThread())
-            return thread->loadState(QString::fromStdString(path));
-
-        return false;
+        return emuInstances[0]->getEmuThread()
+            ->loadState(QString::fromStdString(path));
     });
     
     // set global
@@ -397,10 +414,15 @@ void ScriptManager::onFrame() {
     
     try {
         auto result = onFrameCallback();
+        // NOTE: if emu.stop() is called, the emulator will crash, even though we check for if (!running)
+        // here again, it will crash regardless because emu.stop() immediately invalidates the callback itself
+
         if (result.valid() && result.get_type() == sol::type::string) {
             std::string str = result;
+
             if (str == "unregister")
                 onFrameCallback = sol::nil;
+            
             else if (str == "unregisterAll")
                 resetAll();
         }
@@ -416,10 +438,15 @@ void ScriptManager::onPause(bool pausing) {
     
     try {
         auto result = onPauseCallback(pausing);
+        // NOTE: if emu.stop() is called, the emulator will crash, even though we check for if (!running)
+        // here again, it will crash regardless because emu.stop() immediately invalidates the callback itself
+        
         if (result.valid() && result.get_type() == sol::type::string) {
             std::string str = result;
+
             if (str == "unregister")
                 onPauseCallback = sol::nil;
+            
             else if (str == "unregisterAll")
                 resetAll();
         }

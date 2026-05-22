@@ -21,6 +21,7 @@ public:
     
     void setupLua();
     void loadScript(const QString& path);
+    void setLuaArgs(const std::vector<std::string>& args);
     void runScript();
     void stopScript();
 
@@ -31,16 +32,12 @@ public:
     void onFrame();
     void onPause(bool pausing);
 
-    bool shouldSkipSync() const {
-        return luaPendingFrames > 0 && !luaSyncMode;
-    }
-
-    void processPendingFrames() {
-        if (luaPendingFrames > 0)
-            luaPendingFrames--;
-    }
-
+    std::atomic<int> luaPendingFrames{0}; // frames to emulate (1 = 0)
     bool externalInputsBlocked() const { return luaInputActive; }
+
+    // block lua when pending frames
+    std::mutex frameMutex;
+    std::condition_variable frameCond;
     
 private:
     // reset variables, callbacks
@@ -51,7 +48,6 @@ private:
         luaInputMask = 0xFFF;
         luaInputActive = false;
         luaPendingFrames = 0;
-        luaSyncMode = false;
 
         // reset modules cache (e.g: if emu.lua is changed it will be reloaded without having to restart emulator)
         LUA.script(R"(
@@ -71,9 +67,6 @@ private:
     // accessed from main thread (lua) and emu thread
     std::atomic<melonDS::u32> luaInputMask{0xFFF}; // all bits to 1 = no button
     std::atomic<bool> luaInputActive{false}; // whether to apply input mask
-
-    std::atomic<int> luaPendingFrames{0}; // frame skip to run max speed
-    std::atomic<bool> luaSyncMode{false}; // whether to run max speed during frameSkip() (sync or not)
 };
 
 #endif // SCRIPTMANAGER_H

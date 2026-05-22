@@ -26,12 +26,11 @@ function emu.reset()
     native.reset()
 end
 
--- Advances the game by 'frames' number of frames<br>
--- If 'sync' is true, the frame advancing will synchronize with the emulator (slower)
+-- Advances the game by 'frames' amount of frames, as fast as possible (sync)<br>
+-- If 'frames' is 1, nothing special will happen, but lua will pause for a frame
 ---@param frames number|nil
----@param sync boolean|nil
-function emu.frameSkip(frames, sync)
-    return native.frame_skip(frames or 1, sync or false)
+function emu.frameSkip(frames)
+    return native.frame_skip(frames or 1)
 end
 
 -- TODO add a method to enable/disable external inputs
@@ -62,14 +61,16 @@ function emu.pause(pause)
 end
 
 -- Sets a function called every pause event of any kind (from emu.pause() too)<br>
--- If 'func' returns "unregister", the function will be unregistered right away
+-- If 'func' returns "unregister", the function will be unregistered right away<br>
+-- NOTE: DO NOT call emu.stop() in the callback, as the emulator will crash, use "unregisterAll" instead
 ---@param func fun(pausing: boolean): "unregister"|"unregisterAll"|nil
 function emu.onPause(func)
     native.on_pause(func)
 end
 
 -- Sets a function called every game frame<br>
--- If 'func' returns "unregister", the function will be unregistered right away
+-- If 'func' returns "unregister", the function will be unregistered right away<br>
+-- NOTE: DO NOT call emu.stop() in the callback, as the emulator will crash, use "unregisterAll" instead
 ---@param func fun(): "unregister"|"unregisterAll"|nil
 function emu.onFrame(func)
     native.on_frame(func)
