@@ -5,13 +5,14 @@ local emu = {}
 ---@diagnostic disable-next-line: undefined-global
 local native = assert(native, "'native' module not found")
 
--- Returns time in milliseconds
+-- Returns time in milliseconds since the emulator was started (never pauses)
 ---@return integer
 function emu.time()
     return native.time()
 end
 
--- Stops this script
+-- Stops this script<br>
+-- DO NOT USE INSIDE CALLBACKS! (e.g: onPause, onFrame)
 function emu.stop()
     native.stop()
 end
@@ -27,10 +28,21 @@ function emu.reset()
 end
 
 -- Advances the game by 'frames' amount of frames, as fast as possible (sync)<br>
--- If 'frames' is 1, nothing special will happen, but lua will pause for a frame
+-- If 'frames' is 1, nothing special will happen, but lua will pause for a frame<br>
+-- NOTE: This is to synchronize LUA to EMULATOR, use <b>emu.frameStep()</b> for the other way around<br>
+-- NOTE: onFrame callback will be called once per frame regardless of 'frames'
 ---@param frames number|nil
 function emu.frameSkip(frames)
     return native.frame_skip(frames or 1)
+end
+
+-- Advances the game by 'frames' amount of frames, as fast as possible (sync)<br>
+-- The emulator should be paused before this function is called<br>
+-- NOTE: This is to synchronize EMULATOR to LUA, use <b>emu.frameSkip()</b> for the other way around<br>
+-- NOTE: onFrame callback won't be called at all
+---@param frames number|nil
+function emu.frameStep(frames)
+    return native.frame_step(frames or 1)
 end
 
 -- TODO add a method to enable/disable external inputs
@@ -47,7 +59,7 @@ function emu.resetInput()
     return native.reset_input()
 end
 
--- Sets emulator state to paused/unpaused if 'pause' is a boolean
+-- Sets emulator state to paused/unpaused if 'pause' is a boolean<br>
 -- Returns current emulator pause state
 ---@param pause boolean|nil
 ---@return boolean
@@ -60,7 +72,10 @@ function emu.pause(pause)
     return native.pause(pause)
 end
 
--- Sets a function called every pause event of any kind (from emu.pause() too)<br>
+-- setting pause to true and then false causes issues if the game was paused externally at least once
+-- kind of difficult to explain and i have no absolute clue why, just stating it here
+
+-- Sets a function called every pause event of any kind (from emu.pause() as well)<br>
 -- If 'func' returns "unregister", the function will be unregistered right away<br>
 -- NOTE: DO NOT call emu.stop() in the callback, as the emulator will crash, use "unregisterAll" instead
 ---@param func fun(pausing: boolean): "unregister"|"unregisterAll"|nil
