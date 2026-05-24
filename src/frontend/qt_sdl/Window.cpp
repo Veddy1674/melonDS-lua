@@ -843,10 +843,14 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
     if (!emuInstance) return;
 
-    QByteArray geom = saveGeometry();
-    QByteArray enc = geom.toBase64(QByteArray::Base64Encoding);
-    windowCfg.SetString("Geometry", enc.toStdString());
-    Config::Save();
+    if (scriptManager.savePreferences)
+    {
+        QByteArray geom = saveGeometry();
+        QByteArray enc = geom.toBase64(QByteArray::Base64Encoding);
+        windowCfg.SetString("Geometry", enc.toStdString());
+        
+        Config::Save();
+    }
 
     emuInstance->deleteWindow(windowID, false);
 

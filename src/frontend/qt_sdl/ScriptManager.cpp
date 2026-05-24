@@ -250,8 +250,10 @@ void ScriptManager::setupLua() {
     });
 
     // end the whole emulator process
-    native.set_function("terminate", []()
+    native.set_function("terminate", [this](bool savePreferences)
     {
+        this->savePreferences = savePreferences;
+        
         // ends melon.exec()
         QApplication::quit();
     });

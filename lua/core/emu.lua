@@ -18,8 +18,10 @@ function emu.stop()
 end
 
 -- Stops the whole emulator process
-function emu.terminate()
-    native.terminate()
+-- if savePreferences is false (default) all preferences such as window size/position won't be saved (as if the emulator crashed)
+---@param savePreferences boolean|nil
+function emu.terminate(savePreferences)
+    native.terminate(savePreferences or false)
 end
 
 -- Resets current running game
