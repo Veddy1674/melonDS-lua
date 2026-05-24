@@ -51,7 +51,7 @@ CommandLineOptions* ManageArgs(QApplication& melon, int argc, char** argv)
 
     parser.addOption(QCommandLineOption("lua", "Lua script to run on startup", "script"));
     // found out this might be the best clean alternative to pass args to lua
-    parser.addOption(QCommandLineOption("lua-args", "Arguments to pass to Lua script", "args"));
+    parser.addOption(QCommandLineOption("lua-args", "Arguments to pass to Lua script", "args")); // "arg0|arg1|arg2"
 
 #ifdef ARCHIVE_SUPPORT_ENABLED
     parser.addOption(QCommandLineOption({"a", "archive-file"}, "Specify file to load inside an archive given (NDS)", "rom"));
