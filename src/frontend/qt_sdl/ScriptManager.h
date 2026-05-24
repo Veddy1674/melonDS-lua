@@ -39,7 +39,7 @@ public:
     std::mutex frameMutex;
     std::condition_variable frameCond;
 
-    bool savePreferences; // whether to save preferences on emu.terminate(), like a manual window closure or forced closure
+    bool savePreferences = true; // whether to save preferences on emu.terminate(), like a manual window closure or forced closure
     
 private:
     // reset variables, callbacks
