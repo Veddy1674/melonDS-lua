@@ -375,7 +375,7 @@ void ScriptManager::setupLua() {
         if (usesRamFramebuffers && fb_top && fb_bottom) {
 
             void* screen_buffer = (screen_index == 0) ? fb_top : fb_bottom;
-            size_t buffer_size = 256 * 192 * sizeof(u32); // RGBA8, 196,608 bytes (196kb)
+            size_t buffer_size = 256 * 192 * sizeof(u32); // BGRA8, 196,608 bytes (196kb)
 
             return sol::make_object(LUA, std::string(static_cast<const char*>(screen_buffer), buffer_size));
         } else {
